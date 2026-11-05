@@ -69,46 +69,56 @@ class LCD:
 
 VIBRATED = set()
 
+class Session:
+    """One Lua state across frames, like the radio: the script keeps its state between run() calls."""
+    def __init__(self, script):
+        self.L = lua53.LuaRuntime(unpack_returned_tuples=True); g = self.L.globals()
+        self.tel, self.t, self.lcd, self.buzz = {}, 0, LCD(False), []
+        def I(v):
+            if isinstance(v, float):
+                if v != int(v): raise ValueError(f"number has no integer representation: {v}")
+                v = int(v)
+            return v
+        lcd = lambda: self.lcd
+        api = {
+            'clear': lambda: None,
+            'drawText': lambda x, y, t, f=0: lcd().text(I(x), I(y), str(t), int(f or 0)),
+            'drawFilledRectangle': lambda x, y, w, h, f=0: lcd().frect(I(x), I(y), I(w), I(h), int(f or 0)),
+            'drawRectangle': lambda x, y, w, h, f=0: lcd().rect(I(x), I(y), I(w), I(h), int(f or 0)),
+            'drawPoint': lambda x, y, f=0: lcd().pt(I(x), I(y), int(f or 0)),
+            'drawLine': lambda x1, y1, x2, y2, pat, f: (lcd().vline(I(x1), min(I(y1), I(y2)), abs(I(y2) - I(y1)) + 1, int(pat), int(f))
+                                                       if x1 == x2 else lcd().hline(min(I(x1), I(x2)), I(y1), abs(I(x2) - I(x1)) + 1, int(pat), int(f))),
+            'getLastLeftPos': lambda: lcd().last_left,
+            'getLastRightPos': lambda: lcd().last_right,
+        }
+        g.lcd = self.L.table_from(api)
+        for k, v in dict(BLINK=BLINK, INVERS=INVERS, RIGHT=RIGHT, CENTER=CENTER, LEFT=0, FORCE=FORCE, ERASE=ERASE,
+                         SMLSIZE=SML, MIDSIZE=MID, DBLSIZE=DBL, BOLD=BOLD, SOLID=SOLID, DOTTED=DOTTED).items():
+            g[k] = v
+        def getValue(name):
+            tel = self.tel
+            if name == 'tx-voltage': return tel['tx']
+            if name == 'timer1': return tel.get('t', 0)
+            if name == 'thr': return tel.get('thr', -1024)
+            if not tel.get('rq', 0) or name not in tel: return 0
+            return tel[name]
+        g.getValue = getValue
+        g.getRSSI = lambda: (min(99, self.tel.get('rq', 0)), 45, 42)
+        g.getGeneralSettings = lambda: self.L.table_from({'battMin': 6.6, 'battMax': 8.4, 'battWarn': 6.8})
+        g.getDateTime = lambda: self.L.table_from({'hour': 15, 'min': 42})
+        g.getTime = lambda: self.t
+        g.playHaptic = lambda *a: self.buzz.append(a)
+        self.mod = self.L.execute(open(script).read())
+    def frame(self, tel, t, blink_on=None):
+        self.tel, self.t, self.buzz = tel, t, []
+        self.lcd = LCD(bool(t & 64) if blink_on is None else blink_on)   # EdgeTX: BLINK_ON_PHASE = bit 6
+        self.mod.run(0)
+        if self.buzz and tel.get('FM') not in VIBRATED:
+            VIBRATED.add(tel.get('FM')); print('  vibrate:', tel.get('FM'), self.buzz)
+        return self.lcd.px
+
 def run(script, tel, blink_on, t=None):
-    if t is not None: blink_on = bool(t & 64)           # EdgeTX: BLINK_ON_PHASE = bit 6 of the 10 ms clock
-    L = lua53.LuaRuntime(unpack_returned_tuples=True); g = L.globals(); lcd = LCD(blink_on); buzz = []
-    def I(v):
-        if isinstance(v, float):
-            if v != int(v): raise ValueError(f"number has no integer representation: {v}")
-            v = int(v)
-        return v
-    api = {
-        'clear': lambda: None,
-        'drawText': lambda x, y, t, f=0: lcd.text(I(x), I(y), str(t), int(f or 0)),
-        'drawFilledRectangle': lambda x, y, w, h, f=0: lcd.frect(I(x), I(y), I(w), I(h), int(f or 0)),
-        'drawRectangle': lambda x, y, w, h, f=0: lcd.rect(I(x), I(y), I(w), I(h), int(f or 0)),
-        'drawPoint': lambda x, y, f=0: lcd.pt(I(x), I(y), int(f or 0)),
-        'drawLine': lambda x1, y1, x2, y2, pat, f: (lcd.vline(I(x1), min(I(y1), I(y2)), abs(I(y2) - I(y1)) + 1, int(pat), int(f))
-                                                   if x1 == x2 else lcd.hline(min(I(x1), I(x2)), I(y1), abs(I(x2) - I(x1)) + 1, int(pat), int(f))),
-        'getLastLeftPos': lambda: lcd.last_left,
-        'getLastRightPos': lambda: lcd.last_right,
-    }
-    g.lcd = L.table_from(api)
-    for k, v in dict(BLINK=BLINK, INVERS=INVERS, RIGHT=RIGHT, CENTER=CENTER, LEFT=0, FORCE=FORCE, ERASE=ERASE,
-                     SMLSIZE=SML, MIDSIZE=MID, DBLSIZE=DBL, BOLD=BOLD, SOLID=SOLID, DOTTED=DOTTED).items():
-        g[k] = v
-    streaming = tel.get('rq', 0) > 0
-    def getValue(name):
-        if name == 'tx-voltage': return tel['tx']
-        if name == 'timer1': return tel.get('t', 0)
-        if not streaming or name not in tel: return 0
-        return tel[name]
-    g.getValue = getValue
-    g.getRSSI = lambda: (min(99, tel.get('rq', 0)), 45, 42)
-    g.getGeneralSettings = lambda: L.table_from({'battMin': 6.6, 'battMax': 8.4, 'battWarn': 6.8})
-    g.getDateTime = lambda: L.table_from({'hour': 15, 'min': 42})
-    g.getTime = lambda: t if t is not None else (10 if blink_on else 80)
-    g.playHaptic = lambda *a: buzz.append(a)
-    mod = L.execute(open(script).read())
-    mod.run(0)
-    if buzz and tel.get('FM') not in VIBRATED:
-        VIBRATED.add(tel.get('FM')); print('  vibrate:', tel.get('FM'), buzz)
-    return lcd.px
+    return Session(script).frame(tel, 10 if t is None else t, None if t is not None else blink_on)
 
 def to_img(px, scale=4):
     on, off = (40, 44, 52), (178, 196, 170)
@@ -135,16 +145,22 @@ def sheet(imgs, cols=2, pad=10):
     for i, im in enumerate(imgs): out.paste(im, (pad + (i % cols) * (w + pad), pad + (i // cols) * (h + pad)))
     return out
 
+def flight(t):
+    """Scripted flight for the armed preview (t in ticks, loops every 1920):
+    1.0-7.5 s throttle 30..60 %, tilting up to 0.6 rad -> fly from the left, circling; cut at 7.5 s -> catch
+    9.6-16.5 s throttle 85 %, tilting 0.9 rad -> fly from the right, circling fast; cut at 16.5 s -> catch"""
+    s = (t % 1920) / 100
+    thr, tilt = 0.0, 0.0
+    if 1.0 <= s < 7.5: thr, tilt = 0.3 + 0.3 * (s - 1.0) / 6.5, 0.6 * min(1, (s - 1.0) / 3)
+    elif 9.6 <= s < 16.5: thr, tilt = 0.85, 0.9
+    d = tel(99, 98, 7.9, 87, 3.9, 'AIR', 83)
+    d.update({'thr': -1024 + 2048 * thr, 'Ptch': tilt, 'Roll': 0.0})
+    return d
+
 ARMED, READY, BLOCKED = tel(99, 98, 7.9, 87, 3.9, 'AIR', 83), tel(99, 99, 8.2, 100, 4.3, 'AIR*'), tel(80, 85, 7.6, 64, 4.0, 'ANGL!')
 LOW, FAILSAFE, WEAK = tel(90, 92, 7.5, 18, 3.5, 'AIR', 312), tel(12, 30, 7.4, 41, 3.8, '!FS!', 401), tel(30, 64, 7.6, 58, 3.8, 'HOR', 200)
 NOLINK = tel(0, 0, 6.7)
 STATES = [  # name, telemetry, time in 10 ms ticks (one frog beat = 40 ticks)
-    ("armed: active", ARMED, 90), ("armed: bounce up, looking left", ARMED, 170),
-    ("armed: looking right", ARMED, 1810), ("armed: blinking", ARMED, 485),
-    ("armed: a fly buzzes in", ARMED, 420), ("armed: fly hovering, frog stares", ARMED, 630),
-    ("armed: tongue out", ARMED, 652), ("armed: got it", ARMED, 662),
-    ("armed: tongue back with the fly", ARMED, 700), ("armed: gulp", ARMED, 740),
-    ("armed: next fly, from the right", ARMED, 1450), ("armed: tongue out to the right", ARMED, 1622),
     ("disarmed: resting", READY, 100), ("disarmed: arming blocked", BLOCKED, 100),
     ("no link: breathing out, z", NOLINK, 10), ("no link: breathing out, z z", NOLINK, 50),
     ("no link: breathing out, z z Z", NOLINK, 90), ("no link: breathing in, z Z", NOLINK, 130),
@@ -152,20 +168,46 @@ STATES = [  # name, telemetry, time in 10 ms ticks (one frog beat = 40 ticks)
     ("tired (low battery)", LOW, 10), ("tired: yawn opening", LOW, 240), ("tired: big yawn", LOW, 300),
     ("failsafe: dizzy", FAILSAFE, 10), ("link critical: dizzy", WEAK, 20),
 ]
-ANIM = [("armed: active", ARMED), ("disarmed: resting", READY), ("disarmed: arming blocked", BLOCKED),
+FLIGHT_STILLS = [  # name, time in ticks along the scripted flight (armed, one session)
+    ("armed, throttle 0: calm", 50), ("throttle up: a fly comes in", 115), ("fly circling (in front)", 250),
+    ("fly circling (behind the frog)", 330), ("throttle cut: tongue out", 755), ("tongue back with the fly", 770),
+    ("gulp", 800), ("85 % throttle: big fast hops, fly from the right", 1000), ("fast circling", 1300),
+]
+ANIM = [("armed: scripted flight", flight), ("disarmed: resting", READY), ("disarmed: arming blocked", BLOCKED),
         ("low drone battery", LOW), ("failsafe", FAILSAFE), ("link critical", WEAK), ("no link: asleep, radio battery low", NOLINK)]
-LOOP = 1920       # ticks (10 ms): 19.2 s = frog loop (4.8 s) and EdgeTX blink (1.28 s) lining up
+LOOP = 1920       # ticks (10 ms): 19.2 s = frog loop (4.8 s), EdgeTX blink (1.28 s) and the scripted flight
 STEP = 5          # 20 fps
+
+def at(tl, t): return tl(t) if callable(tl) else tl
+
+def flight_frames(script, times):
+    """Run the scripted flight in one session (like the radio) and return the frames at the given ticks."""
+    ses, want, out = Session(script), set(times), {}
+    for t in range(0, max(times) + 1, STEP):
+        px = ses.frame(flight(t), t)
+        if t in want: out[t] = px
+    return [out[t] for t in times]
+
+def loop_frames(script, scale=3, loops=1):
+    """Frames of every ANIM panel over LOOP, after one warm-up loop so the stateful armed panel is seamless."""
+    sessions = [Session(script) for _ in ANIM]
+    for t in range(0, LOOP, STEP):
+        for ses, (_, tl) in zip(sessions, ANIM): ses.frame(at(tl, t), t)
+    frames = []
+    for t in range(LOOP, LOOP * (1 + loops), STEP):
+        frames.append([ses.frame(at(tl, t), t) for ses, (_, tl) in zip(sessions, ANIM)])
+    return frames
 
 if __name__ == '__main__':
     script, out = sys.argv[1], sys.argv[2]                       # out: preview.png
-    # still sheet with the individual animation steps
-    imgs = [labelled(to_img(run(script, tl, (t % 100) < 50, t)), n) for n, tl, t in STATES]
+    # still sheet: the armed flight steps, then the individual animation steps of the other states
+    fl = flight_frames(script, [t for _, t in FLIGHT_STILLS])
+    imgs = [labelled(to_img(px), n) for (n, _), px in zip(FLIGHT_STILLS, fl)]
+    imgs += [labelled(to_img(run(script, tl, True, t)), n) for n, tl, t in STATES]
     sheet(imgs).save(out.replace('.png', '_states.png')); print('saved', out.replace('.png', '_states.png'))
-    to_img(run(script, ARMED, True, 100), scale=8).save(out.replace('.png', '_big.png')); print('saved big')
-    # seamless 12 s loop of every state, as animated PNG (APNG) and animated WebP
-    frames = [sheet([labelled(to_img(run(script, tl, (t % 100) < 50, t), scale=3), n) for n, tl in ANIM])
-              for t in range(0, LOOP, STEP)]
+    to_img(fl[2], scale=8).save(out.replace('.png', '_big.png')); print('saved big')
+    # seamless 19.2 s loop of every state, as animated PNG (APNG) and animated WebP
+    frames = [sheet([labelled(to_img(px, scale=3), n) for px, (n, _) in zip(panels, ANIM)]) for panels in loop_frames(script)]
     frames[0].save(out, save_all=True, append_images=frames[1:], duration=STEP * 10, loop=0, optimize=True)
     frames[0].save(out.replace('.png', '.webp'), save_all=True, append_images=frames[1:], duration=STEP * 10,
                    loop=0, lossless=True, method=4)

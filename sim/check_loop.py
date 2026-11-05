@@ -1,10 +1,8 @@
-"""Every animation must repeat exactly after LOOP ticks: frame(t) == frame(t + LOOP) for all states."""
+"""Every panel must repeat exactly after LOOP ticks (the armed panel runs a stateful scripted flight)."""
 import sys
 sys.path.insert(0, sys.path[0])
-from sim import run, ANIM, LOOP, STEP
-script, bad = sys.argv[1], []
-for name, tl in ANIM:
-    for t in range(0, LOOP, STEP):
-        if run(script, tl, True, t) != run(script, tl, True, t + LOOP) or run(script, tl, True, t) != run(script, tl, True, t + 7 * LOOP):
-            bad.append((name, t))
-print('loop check:', 'all states repeat exactly every', LOOP * 10, 'ms' if not bad else f'MISMATCH {bad[:5]}')
+from sim import loop_frames, ANIM, LOOP, STEP
+frames = loop_frames(sys.argv[1], loops=2)
+n = LOOP // STEP
+bad = [(ANIM[p][0], i * STEP) for i in range(n) for p in range(len(ANIM)) if frames[i][p] != frames[i + n][p]]
+print('loop check:', f'all panels repeat exactly every {LOOP * 10} ms' if not bad else f'MISMATCH {bad[:5]}')

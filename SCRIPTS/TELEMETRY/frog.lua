@@ -22,6 +22,9 @@ local GLYPH_W = {
 -- frog without pupils and mouth, as runs: x, y, width (repeated)
 local FROG = { 15, 0, 5, 30, 0, 5, 14, 1, 1, 20, 1, 1, 29, 1, 1, 35, 1, 1, 13, 2, 1, 21, 2, 1, 28, 2, 1, 36, 2, 1, 13, 3, 1, 21, 3, 1, 28, 3, 1, 36, 3, 1, 13, 4, 1, 21, 4, 1, 28, 4, 1, 36, 4, 1, 13, 5, 1, 21, 5, 1, 28, 5, 1, 36, 5, 1, 13, 6, 1, 21, 6, 8, 36, 6, 1, 14, 7, 1, 20, 7, 1, 29, 7, 1, 35, 7, 1, 13, 8, 1, 15, 8, 5, 30, 8, 5, 36, 8, 1, 13, 9, 1, 22, 9, 1, 27, 9, 1, 36, 9, 1, 12, 10, 1, 37, 10, 1, 12, 11, 1, 37, 11, 1, 12, 12, 1, 37, 12, 1, 13, 13, 1, 36, 13, 1, 14, 14, 1, 35, 14, 1, 15, 15, 1, 34, 15, 1, 15, 16, 1, 34, 16, 1, 15, 17, 1, 34, 17, 1, 10, 18, 2, 15, 18, 1, 17, 18, 1, 32, 18, 1, 34, 18, 1, 38, 18, 2, 9, 19, 1, 12, 19, 1, 15, 19, 1, 18, 19, 1, 31, 19, 1, 34, 19, 1, 37, 19, 1, 40, 19, 1, 8, 20, 1, 13, 20, 1, 15, 20, 1, 18, 20, 1, 31, 20, 1, 34, 20, 1, 36, 20, 1, 41, 20, 1, 7, 21, 1, 14, 21, 2, 18, 21, 1, 31, 21, 1, 34, 21, 2, 42, 21, 1, 7, 22, 1, 15, 22, 1, 18, 22, 1, 31, 22, 1, 34, 22, 1, 42, 22, 1, 7, 23, 1, 14, 23, 1, 17, 23, 1, 32, 23, 1, 35, 23, 1, 42, 23, 1, 7, 24, 1, 11, 24, 1, 14, 24, 1, 17, 24, 1, 32, 24, 1, 35, 24, 1, 38, 24, 1, 42, 24, 1, 7, 25, 1, 12, 25, 1, 14, 25, 1, 17, 25, 1, 32, 25, 1, 35, 25, 1, 37, 25, 1, 42, 25, 1, 7, 26, 1, 12, 26, 1, 14, 26, 1, 17, 26, 1, 32, 26, 1, 35, 26, 1, 37, 26, 1, 42, 26, 1, 7, 27, 1, 14, 27, 1, 17, 27, 1, 32, 27, 1, 35, 27, 1, 42, 27, 1, 7, 28, 8, 17, 28, 1, 32, 28, 1, 35, 28, 8, 6, 29, 1, 8, 29, 1, 13, 29, 1, 15, 29, 2, 18, 29, 1, 20, 29, 10, 31, 29, 1, 33, 29, 2, 36, 29, 1, 41, 29, 1, 43, 29, 1, 4, 30, 2, 7, 30, 2, 12, 30, 1, 15, 30, 1, 17, 30, 1, 19, 30, 1, 30, 30, 1, 32, 30, 1, 34, 30, 1, 37, 30, 1, 41, 30, 2, 44, 30, 2, 10, 31, 2, 14, 31, 2, 17, 31, 2, 20, 31, 2, 28, 31, 2, 31, 31, 2, 34, 31, 2, 38, 31, 2 }
 
+-- frog silhouette (row spans, 1 px halo): erased before the frog is drawn, hides what is behind it
+local FROG_MASK = { 14, 0, 22, 13, 1, 24, 12, 2, 26, 12, 3, 26, 12, 4, 26, 12, 5, 26, 12, 6, 26, 13, 7, 24, 12, 8, 26, 12, 9, 26, 11, 10, 28, 11, 11, 28, 11, 12, 28, 12, 13, 26, 13, 14, 24, 14, 15, 22, 14, 16, 22, 14, 17, 22, 9, 18, 32, 8, 19, 34, 7, 20, 36, 6, 21, 38, 6, 22, 38, 6, 23, 38, 6, 24, 38, 6, 25, 38, 6, 26, 38, 6, 27, 38, 6, 28, 38, 5, 29, 40, 3, 30, 44, 9, 31, 32 }
+
 -- face parts drawn on top of the frog (both halves)
 local FACE = {
   eyes = {
@@ -258,47 +261,81 @@ local FX, FY = 39, 1                -- frog position (50 x 32, centred on x = 63
 -- sleeping breath: 6 beats = 2.4 s; beats 0..2 breathing out, 3..5 breathing in
 local function breath(t) return (t // BEAT) % 6 end
 
--- armed: every 24 beats (9.6 s) a fly buzzes in, alternately from the left and the right; the frog
--- hops excitedly while it comes in, stares at it, keeps still to catch it with its tongue and gulps it down.
--- Beats 0..5 nothing, 6..15 fly flying in, 16 tongue out, 17 tongue back with the fly, 18..19 gulp.
-local HUNT = 24
-local function hunt(t)
-  local cycle = t % (2 * HUNT * BEAT)
-  local side = (cycle < HUNT * BEAT) and -1 or 1                    -- -1: fly on the left, 1: right
-  local h = cycle % (HUNT * BEAT)                                   -- ticks into this hunt
-  local function mx(x, w) return (side < 0) and x or (127 - x - (w or 0)) end
-  if h < 6 * BEAT or h >= 20 * BEAT then return nil end
-  local r = { side = side }
-  if h < 16 * BEAT then                                             -- flying in on a wobbly path
-    local p = (h - 6 * BEAT) / (10 * BEAT)
-    r.fx, r.fy = mx(math.floor(19 + 17 * p + 0.5), 4), math.floor(7 + 4 * math.sin(p * 5 * math.pi) + 0.5)
-    r.flying = true
-  elseif h < 18 * BEAT then                                         -- tongue out to the fly, then back
-    local f = (h < 17 * BEAT) and math.min(1, (h - 16 * BEAT) / 16) or (1 - (h - 17 * BEAT) / BEAT)
-    local tx, ty = 63 + f * (mx(38) - 63), (FY + 13) + f * (8 - (FY + 13))
-    r.tongue = { math.floor(tx + 0.5), math.floor(ty + 0.5) }
-    if h < 16 * BEAT + 16 then r.fx, r.fy = mx(36, 4), 7               -- fly waits until the tongue arrives
-    else r.fx, r.fy = r.tongue[1] - 2, r.tongue[2] - 1 end             -- then rides on the tip
-  else
-    r.gulp = true
-  end
-  return r
+-- Armed frog, driven by the flight:
+-- * throttle sets the excitement: calm at zero, hopping faster (1.25..5 per second) as the throttle
+--   rises, 2 px high above half throttle
+-- * while the throttle is up a fly circles the frog (behind it on the back half of the orbit), the
+--   faster the more the drone tilts (tilt ~ speed); the frog follows it with its eyes
+-- * the moment the throttle hits zero the frog catches the fly with its tongue and gulps it down;
+--   raising the throttle again brings a new fly in from the side, alternating left and right
+local ORBIT_X, ORBIT_Y, ORBIT_RX, ORBIT_RY = 63.5, 15, 32, 14
+local TONGUE_OUT, TONGUE_BACK, GULP = 12, 18, 60        -- ticks (10 ms)
+local ENTER = 50                                       -- ticks for a new fly to fly in from the side
+local hop = { phase = 0 }
+local fly = { state = "gone", side = 1 }               -- gone / entering / circling / caught
+local lastT
+
+local function throttle()                               -- 0..1 from the throttle stick
+  return clamp((getValue("thr") + 1024) / 2048, 0, 1)
 end
 
-local function tongue(x1, y1)                                       -- 2 px wide, from the mouth
-  local x0, y0 = 63, FY + 13
+local function orbitPos(a)                              -- top-left of the 5x3 fly sprite
+  return math.floor(ORBIT_X + ORBIT_RX * math.cos(a) - 2 + 0.5), math.floor(ORBIT_Y + ORBIT_RY * math.sin(a) - 1 + 0.5)
+end
+
+local function updateFlight(t)
+  local dt = lastT and clamp(t - lastT, 0, 20) / 100 or 0  -- seconds; capped when the screen was away
+  lastT = t
+  local thr = throttle()
+  local flying = thr > 0.03
+  if flying then hop.phase = hop.phase + (1.25 + 3.75 * thr) * dt else hop.phase = 0 end
+  hop.height = flying and ((thr > 0.5) and 2 or 1) or 0
+
+  if fly.state == "caught" then
+    fly.timer = fly.timer + dt * 100
+    if fly.timer >= TONGUE_OUT + TONGUE_BACK + GULP then fly.state = "gone" end
+  end
+  if fly.state == "gone" and flying then
+    fly.side = -fly.side
+    fly.state, fly.timer, fly.angle = "entering", 0, (fly.side < 0) and math.pi or 0
+  elseif (fly.state == "entering" or fly.state == "circling") and not flying then
+    fly.state, fly.timer = "caught", 0                  -- throttle cut: snap!
+  end
+  if fly.state == "entering" or fly.state == "circling" then
+    local tilt = math.sqrt(getValue("Ptch") ^ 2 + getValue("Roll") ^ 2)       -- radians
+    local revs = 0.25 + 1.25 * clamp(tilt / 0.7, 0, 1)                         -- rounds per second
+    if fly.state == "circling" then fly.angle = fly.angle + 2 * math.pi * revs * dt * ((fly.side < 0) and 1 or -1) end
+    local ox, oy = orbitPos(fly.angle)
+    if fly.state == "entering" then
+      fly.timer = fly.timer + dt * 100
+      local f = clamp(fly.timer / ENTER, 0, 1)
+      local sx = (fly.side < 0) and 19 or 104
+      fly.x, fly.y = math.floor(sx + f * (ox - sx) + 0.5), oy
+      if f >= 1 then fly.state = "circling" end
+    else
+      fly.x, fly.y = ox, oy
+    end
+    fly.behind = fly.state == "circling" and math.sin(fly.angle) < 0
+  end
+end
+
+local function tongue(x1, y1, y)                        -- 2 px wide, from the mouth
+  local x0, y0 = 63, y + 13
   local n = math.max(math.abs(x1 - x0), math.abs(y1 - y0), 1)
   for i = 0, n do
-    local x, y = math.floor(x0 + (x1 - x0) * i / n + 0.5), math.floor(y0 + (y1 - y0) * i / n + 0.5)
-    lcd.drawFilledRectangle(x, y, 2, 1, FORCE)
+    lcd.drawFilledRectangle(math.floor(x0 + (x1 - x0) * i / n + 0.5), math.floor(y0 + (y1 - y0) * i / n + 0.5), 2, 1, FORCE)
   end
-  lcd.drawFilledRectangle(x1 - 1, y1 - 1, 3, 3, FORCE)               -- sticky tip
+  lcd.drawFilledRectangle(x1 - 1, y1 - 1, 3, 3, FORCE)  -- sticky tip
+end
+
+local function drawFly(t, x, y)
+  draw(((t // 5) % 2 == 0) and SPRITES.flyUp or SPRITES.flyDown, x, y, FORCE)
 end
 
 -- the frog's mood, most urgent first:
 --   dizzy   failsafe or link critical   spiral eyes spinning, wobbly mouth
 --   tired   drone battery low           heavy eyelids, yawns every 3.84 s
---   active  armed                       open grin, glancing left and right, bouncing; hunts flies
+--   active  armed                       open grin, hops with the throttle, hunts the circling fly
 --   resting disarmed                    eyes open, smiling, blinks every 4.8 s
 --   asleep  no link                     eyes closed, breathing (wide mouth / open "o"), z's rising
 local function drawFrog(mood, t)
@@ -316,31 +353,42 @@ local function drawFrog(mood, t)
     eyes = FACE.eyes.closed
     mouth = (breath(t) < 3) and FACE.mouth.snore or FACE.mouth.wide            -- out: "o", in: wide
   end
-  local fly
+  local catch                                                               -- tongue tip while catching
   if mood == "active" then
-    fly = hunt(t)
-    local b = beat % 12                                                     -- look around: centre, left, centre, right
-    eyes = (b == 4 or b == 5) and FACE.eyes.lookLeft or (b == 10 or b == 11) and FACE.eyes.lookRight or FACE.eyes.open
     mouth = FACE.mouth.grin
-    y = FY + 1 - beat % 2                                                   -- bounce: 1 px up every other beat
-    if fly then
-      y = FY                                                                -- still for the catch and the gulp
-      if fly.flying then                                                    -- excited: 2 px hops, twice as fast
-        y = ((t // (BEAT // 2)) % 2 == 0) and FY + 2 or FY
+    y = FY + 2 - ((hop.phase % 1 < 0.5) and hop.height or 0)               -- crouched, hopping with the throttle
+    local b = beat % 12                                                     -- no fly: look around
+    eyes = (b == 4 or b == 5) and FACE.eyes.lookLeft or (b == 10 or b == 11) and FACE.eyes.lookRight or FACE.eyes.open
+    if fly.state == "entering" or fly.state == "circling" then              -- eyes on the fly
+      eyes = (fly.x + 2 < 57) and FACE.eyes.lookLeft or (fly.x + 2 > 70) and FACE.eyes.lookRight or FACE.eyes.open
+    elseif fly.state == "caught" then
+      eyes = (fly.x + 2 < 63) and FACE.eyes.lookLeft or FACE.eyes.lookRight
+      local f = fly.timer
+      if f < TONGUE_OUT + TONGUE_BACK then
+        local k = (f < TONGUE_OUT) and (f / TONGUE_OUT) or (1 - (f - TONGUE_OUT) / TONGUE_BACK)
+        local tx, ty = fly.x + 2, fly.y + 1
+        catch = { math.floor(63 + k * (tx - 63) + 0.5), math.floor((y + 13) + k * (ty - (y + 13)) + 0.5),
+                  f >= TONGUE_OUT }                                         -- third: fly is on the tip
+      else
+        eyes, mouth = FACE.eyes.closed, FACE.mouth.smile                     -- gulp, eyes shut with delight
       end
-      eyes = (fly.side < 0) and FACE.eyes.lookLeft or FACE.eyes.lookRight  -- and stares at the fly
-      if fly.gulp then eyes, mouth = FACE.eyes.closed, FACE.mouth.smile end -- gulp, eyes shut with delight
     end
   end
-  if (mood == "resting" or mood == "active") and not (fly and fly.gulp) and (t % (12 * BEAT)) < 15 then
+  if (mood == "resting" or mood == "active") and not (fly.state == "caught" and fly.timer >= TONGUE_OUT + TONGUE_BACK)
+     and (t % (12 * BEAT)) < 15 then
     eyes = FACE.eyes.blink                                                  -- 150 ms blink every 4.8 s
   end
+  local showFly = mood == "active" and (fly.state == "entering" or fly.state == "circling"
+                                        or (fly.state == "caught" and fly.timer < TONGUE_OUT))
+  if showFly and fly.behind then drawFly(t, fly.x, fly.y) end               -- behind: the frog covers it
+  draw(FROG_MASK, FX, y, ERASE)
   draw(FROG, FX, y, FORCE)
   draw(eyes, FX, y, FORCE)
   draw(mouth, FX, y, FORCE)
-  if fly then
-    if fly.tongue then tongue(fly.tongue[1], fly.tongue[2]) end
-    if fly.fx then draw(((t // 5) % 2 == 0) and SPRITES.flyUp or SPRITES.flyDown, fly.fx, fly.fy, FORCE) end
+  if showFly and not fly.behind then drawFly(t, fly.x, fly.y) end
+  if catch then
+    tongue(catch[1], catch[2], y)
+    if catch[3] then drawFly(t, catch[1] - 2, catch[2] - 1) end
   end
   if mood == "asleep" then
     local b = breath(t)                       -- z's appear one by one while breathing out, fade while in
@@ -357,7 +405,9 @@ local function frogAndMode(linked, low, critical)
 
   local mood = not linked and "asleep" or (failsafe or critical) and "dizzy" or low and "tired"
                or armed and "active" or "resting"
-  drawFrog(mood, getTime())
+  local t = getTime()
+  if armed then updateFlight(t) else fly.state, lastT = "gone", nil end
+  drawFrog(mood, t)
   modeBox(name, armed and not (failsafe and not blinkOn()), blocked)
 end
 
