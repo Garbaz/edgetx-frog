@@ -1,5 +1,7 @@
+import os
 from PIL import Image
-D='/tmp/edgetx/radio/src/fonts/std/'
+# bitmap fonts copied from EdgeTX v2.12.4 radio/src/fonts/std (GPL-2.0)
+D = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fonts') + os.sep
 # name: (file, cell width, step rows, glyph height)
 SPEC={'SML':('font_04x06.png',5,7,6),'STD':('font_05x07.png',5,8,7),'MID':('font_08x10.png',8,12,12),'DBL':('font_10x14.png',10,16,16)}
 class Font:

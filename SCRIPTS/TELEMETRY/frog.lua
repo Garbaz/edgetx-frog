@@ -19,51 +19,35 @@ local GLYPH_W = {
   SML = { ["A"] = 4, ["B"] = 4, ["C"] = 4, ["D"] = 4, ["E"] = 4, ["F"] = 4, ["G"] = 4, ["H"] = 4, ["I"] = 3, ["J"] = 4, ["K"] = 4, ["L"] = 4, ["M"] = 5, ["N"] = 4, ["O"] = 4, ["P"] = 4, ["Q"] = 4, ["R"] = 4, ["S"] = 4, ["T"] = 3, ["U"] = 4, ["V"] = 4, ["W"] = 5, ["X"] = 4, ["Y"] = 3, ["Z"] = 4, ["0"] = 4, ["1"] = 4, ["2"] = 4, ["3"] = 4, ["4"] = 4, ["5"] = 4, ["6"] = 4, ["7"] = 4, ["8"] = 4, ["9"] = 4, ["!"] = 1, ["-"] = 4, ["*"] = 3, [" "] = 2 },
 }
 
-local FROG = {
-  "...............#####..........#####...............",
-  "..............#.....#........#.....#..............",
-  ".............#.......#......#.......#.............",
-  ".............#...##..#......#..##...#.............",
-  ".............#.#####.#......#.#####.#.............",
-  ".............#..###..#......#..###..#.............",
-  ".............#.......########.......#.............",
-  "..............#.....#........#.....#..............",
-  ".............#.#####..........#####.#.............",
-  ".............#........#....#........#.............",
-  "............#........................#............",
-  "............#.#....................#.#............",
-  "............#..#####..........#####..#............",
-  ".............#......##########......#.............",
-  "..............#....................#..............",
-  "...............#..................#...............",
-  "...............#..................#...............",
-  "...............#..................#...............",
-  "..........##...#.#..............#.#...##..........",
-  ".........#..#..#..#............#..#..#..#.........",
-  "........#....#.#..#............#..#.#....#........",
-  ".......#......##..#............#..##......#.......",
-  ".......#.......#..#............#..#.......#.......",
-  ".......#......#..#..............#..#......#.......",
-  ".......#...#..#..#..............#..#..#...#.......",
-  ".......#....#.#..#..............#..#.#....#.......",
-  ".......#....#.#..#..............#..#.#....#.......",
-  ".......#......#..#..............#..#......#.......",
-  ".......########..#..............#..########.......",
-  "......#.#....#.##.#.##########.#.##.#....#.#......",
-  "....##.##...#..#.#.#..........#.#.#..#...##.##....",
-  "..........##..##.##.##......##.##.##..##..........",
+-- frog without pupils and mouth, as runs: x, y, width (repeated)
+local FROG = { 15, 0, 5, 30, 0, 5, 14, 1, 1, 20, 1, 1, 29, 1, 1, 35, 1, 1, 13, 2, 1, 21, 2, 1, 28, 2, 1, 36, 2, 1, 13, 3, 1, 21, 3, 1, 28, 3, 1, 36, 3, 1, 13, 4, 1, 21, 4, 1, 28, 4, 1, 36, 4, 1, 13, 5, 1, 21, 5, 1, 28, 5, 1, 36, 5, 1, 13, 6, 1, 21, 6, 8, 36, 6, 1, 14, 7, 1, 20, 7, 1, 29, 7, 1, 35, 7, 1, 13, 8, 1, 15, 8, 5, 30, 8, 5, 36, 8, 1, 13, 9, 1, 22, 9, 1, 27, 9, 1, 36, 9, 1, 12, 10, 1, 37, 10, 1, 12, 11, 1, 37, 11, 1, 12, 12, 1, 37, 12, 1, 13, 13, 1, 36, 13, 1, 14, 14, 1, 35, 14, 1, 15, 15, 1, 34, 15, 1, 15, 16, 1, 34, 16, 1, 15, 17, 1, 34, 17, 1, 10, 18, 2, 15, 18, 1, 17, 18, 1, 32, 18, 1, 34, 18, 1, 38, 18, 2, 9, 19, 1, 12, 19, 1, 15, 19, 1, 18, 19, 1, 31, 19, 1, 34, 19, 1, 37, 19, 1, 40, 19, 1, 8, 20, 1, 13, 20, 1, 15, 20, 1, 18, 20, 1, 31, 20, 1, 34, 20, 1, 36, 20, 1, 41, 20, 1, 7, 21, 1, 14, 21, 2, 18, 21, 1, 31, 21, 1, 34, 21, 2, 42, 21, 1, 7, 22, 1, 15, 22, 1, 18, 22, 1, 31, 22, 1, 34, 22, 1, 42, 22, 1, 7, 23, 1, 14, 23, 1, 17, 23, 1, 32, 23, 1, 35, 23, 1, 42, 23, 1, 7, 24, 1, 11, 24, 1, 14, 24, 1, 17, 24, 1, 32, 24, 1, 35, 24, 1, 38, 24, 1, 42, 24, 1, 7, 25, 1, 12, 25, 1, 14, 25, 1, 17, 25, 1, 32, 25, 1, 35, 25, 1, 37, 25, 1, 42, 25, 1, 7, 26, 1, 12, 26, 1, 14, 26, 1, 17, 26, 1, 32, 26, 1, 35, 26, 1, 37, 26, 1, 42, 26, 1, 7, 27, 1, 14, 27, 1, 17, 27, 1, 32, 27, 1, 35, 27, 1, 42, 27, 1, 7, 28, 8, 17, 28, 1, 32, 28, 1, 35, 28, 8, 6, 29, 1, 8, 29, 1, 13, 29, 1, 15, 29, 2, 18, 29, 1, 20, 29, 10, 31, 29, 1, 33, 29, 2, 36, 29, 1, 41, 29, 1, 43, 29, 1, 4, 30, 2, 7, 30, 2, 12, 30, 1, 15, 30, 1, 17, 30, 1, 19, 30, 1, 30, 30, 1, 32, 30, 1, 34, 30, 1, 37, 30, 1, 41, 30, 2, 44, 30, 2, 10, 31, 2, 14, 31, 2, 17, 31, 2, 20, 31, 2, 28, 31, 2, 31, 31, 2, 34, 31, 2, 38, 31, 2 }
+
+-- face parts drawn on top of the frog (both halves)
+local FACE = {
+  eyes = {
+    open = { 17, 3, 2, 31, 3, 2, 15, 4, 5, 30, 4, 5, 16, 5, 3, 31, 5, 3 },
+    blink = { 14, 4, 7, 29, 4, 7 },
+    closed = { 14, 4, 1, 20, 4, 1, 29, 4, 1, 35, 4, 1, 15, 5, 5, 30, 5, 5 },
+    tired = { 14, 3, 7, 29, 3, 7, 15, 4, 5, 30, 4, 5, 16, 5, 3, 31, 5, 3 },
+    spiral = {
+      { 15, 2, 5, 30, 2, 5, 19, 3, 1, 30, 3, 1, 15, 4, 3, 19, 4, 1, 30, 4, 1, 32, 4, 3, 15, 5, 1, 19, 5, 1, 30, 5, 1, 34, 5, 1, 15, 6, 5, 30, 6, 5 },
+      { 15, 2, 3, 19, 2, 1, 30, 2, 1, 32, 2, 3, 15, 3, 1, 17, 3, 1, 19, 3, 1, 30, 3, 1, 32, 3, 1, 34, 3, 1, 15, 4, 1, 17, 4, 1, 19, 4, 1, 30, 4, 1, 32, 4, 1, 34, 4, 1, 15, 5, 1, 19, 5, 1, 30, 5, 1, 34, 5, 1, 15, 6, 5, 30, 6, 5 },
+      { 15, 2, 5, 30, 2, 5, 15, 3, 1, 19, 3, 1, 30, 3, 1, 34, 3, 1, 15, 4, 1, 17, 4, 3, 30, 4, 3, 34, 4, 1, 15, 5, 1, 34, 5, 1, 15, 6, 5, 30, 6, 5 },
+      { 15, 2, 5, 30, 2, 5, 15, 3, 1, 19, 3, 1, 30, 3, 1, 34, 3, 1, 15, 4, 1, 17, 4, 1, 19, 4, 1, 30, 4, 1, 32, 4, 1, 34, 4, 1, 15, 5, 1, 17, 5, 1, 19, 5, 1, 30, 5, 1, 32, 5, 1, 34, 5, 1, 15, 6, 1, 17, 6, 3, 30, 6, 3, 34, 6, 1 },
+    },
+  },
+  mouth = {
+    smile = { 14, 11, 1, 35, 11, 1, 15, 12, 5, 30, 12, 5, 20, 13, 10 },
+    frown = { 15, 12, 20, 14, 13, 1, 35, 13, 1 },
+    wavy = { 14, 12, 2, 18, 12, 2, 22, 12, 2, 26, 12, 2, 30, 12, 2, 34, 12, 2, 16, 13, 2, 20, 13, 2, 24, 13, 2, 28, 13, 2, 32, 13, 2 },
+  },
 }
 -- SPRITES END
 
-local ZZZ = {
-  ".....####",
-  "........#",
-  ".......#.",
-  "###...#..",
-  "..#..####",
-  ".#.......",
-  "###......",
-}
+-- sleeping frog: three z's of growing size, rising one after the other
+local Z_SMALL = { "###", ".#.", "###" }
+local Z_MID   = { "####", "..#.", ".#..", "####" }
+local Z_BIG   = { "#####", "...#.", "..#..", ".#...", "#####" }
 
 local BOLT = {
   "..##",
@@ -107,7 +91,7 @@ local STOPWATCH = {
   ".#####.",
 }
 
--- turn a sprite (list of strings) into horizontal runs, once at load time
+-- turn a sprite (list of strings) into horizontal runs (flat list: x, y, width, ...), once at load time
 local function runs(sprite)
   local r = {}
   for y, row in ipairs(sprite) do
@@ -115,19 +99,19 @@ local function runs(sprite)
     while true do
       local s, e = string.find(row, "#+", x)
       if not s then break end
-      r[#r + 1] = { s - 1, y - 1, e - s + 1 }
+      r[#r + 1] = s - 1; r[#r + 1] = y - 1; r[#r + 1] = e - s + 1
       x = e + 1
     end
   end
   return r
 end
 
-local SPRITES = { frog = runs(FROG), zzz = runs(ZZZ), bolt = runs(BOLT), stopwatch = runs(STOPWATCH), clock = runs(CLOCK),
-                  radioCap = runs(RADIO_CAP) }
+local SPRITES = { bolt = runs(BOLT), stopwatch = runs(STOPWATCH), clock = runs(CLOCK), radioCap = runs(RADIO_CAP),
+                  zSmall = runs(Z_SMALL), zMid = runs(Z_MID), zBig = runs(Z_BIG) }
 
-local function draw(sprite, x, y, flags)
-  for _, r in ipairs(SPRITES[sprite]) do
-    lcd.drawFilledRectangle(x + r[1], y + r[2], r[3], 1, flags)
+local function draw(r, x, y, flags)
+  for i = 1, #r, 3 do
+    lcd.drawFilledRectangle(x + r[i], y + r[i + 1], r[i + 2], 1, flags)
   end
 end
 
@@ -153,7 +137,7 @@ end
 local LQ_AXIS, LQ_BOT = 9, 47                       -- x 1..17, y 1..47 (1 px screen margin)
 local LQ_SEGS, LQ_SEG_H, LQ_GAP = 5, 6, 2
 local function linkWedge(tq, rq, warn)
-  draw("radioCap", LQ_AXIS - 8, 1, FORCE)
+  draw(SPRITES.radioCap, LQ_AXIS - 8, 1, FORCE)
   local hide = (math.min(tq, rq) < warn) and not blinkOn()
   local lit = { math.ceil(LQ_SEGS * clamp(tq, 0, 100) / 100), math.ceil(LQ_SEGS * clamp(rq, 0, 100) / 100) }
   for k = 0, LQ_SEGS - 1 do                          -- k = 0 is the bottom segment
@@ -185,11 +169,11 @@ end
 -- clock and flight timer, mirrored around the screen axis x = 63.5, symbols on the outside
 local function times()
   local t = getDateTime()
-  draw("clock", 29, 56, FORCE)
+  draw(SPRITES.clock, 29, 56, FORCE)
   lcd.drawText(38, 57, string.format("%02d:%02d", t.hour, t.min), SMLSIZE)        -- ink x 38..58
   local secs = math.min(math.floor(getValue("timer1")), 99 * 60 + 59)
   lcd.drawText(69, 57, string.format("%02d:%02d", secs // 60, secs % 60), SMLSIZE) -- ink x 69..89
-  draw("stopwatch", 92, 56, FORCE)
+  draw(SPRITES.stopwatch, 92, 56, FORCE)
 end
 
 -- flight mode text, centred to the pixel: EdgeTX's CENTER flag counts the blank column after
@@ -207,7 +191,7 @@ local function droneBattery(pct, low)
     local h = math.floor((BH - 4) * pct / 100 + 0.5)
     if h > 0 then lcd.drawFilledRectangle(BX + 2, BY + BH - 2 - h, BW - 4, h, FORCE) end
   end
-  draw("bolt", BX + 5, BY + 15, 0)                              -- XOR: shows on fill and on empty
+  draw(SPRITES.bolt, BX + 5, BY + 15, 0)                              -- XOR: shows on fill and on empty
 end
 
 -- drone %, centred under the battery (x 110..126); no "%" sign so 100 still (nearly) fits,
@@ -253,14 +237,41 @@ local function modeBox(name, filled, dotted)
 end
 
 local FX, FY = 39, 1                -- frog position (50 x 32, centred on x = 63.5)
-local function frogAndMode(linked)
+
+-- the frog's mood, most urgent first:
+--   dizzy  failsafe or link critical   spiral eyes spinning, wobbly mouth
+--   tired  drone battery low           heavy eyelids, corners of the mouth down, slow blinks
+--   awake  armed                       eyes open, blinks every few seconds
+--   asleep disarmed / no link          eyes closed, z's rising (only with a link)
+local function drawFrog(mood, linked, t)
+  local eyes, mouth = FACE.eyes.open, FACE.mouth.smile
+  if mood == "dizzy" then
+    eyes, mouth = FACE.eyes.spiral[(t // 15) % 4 + 1], FACE.mouth.wavy      -- quarter turn every 150 ms
+  elseif mood == "tired" then
+    eyes, mouth = ((t % 300) < 45) and FACE.eyes.closed or FACE.eyes.tired, FACE.mouth.frown
+  elseif mood == "asleep" then
+    eyes = FACE.eyes.closed
+  elseif (t % 400) < 15 then
+    eyes = FACE.eyes.blink                                                    -- 150 ms blink every 4 s
+  end
+  draw(FROG, FX, FY, FORCE)
+  draw(eyes, FX, FY, FORCE)
+  draw(mouth, FX, FY, FORCE)
+  if mood == "asleep" and linked then
+    local f = (t // 60) % 4                                                   -- 0.6 s per step
+    if f <= 2 then draw(SPRITES.zSmall, FX + 41, FY + 10, FORCE) end
+    if f >= 1 then draw(SPRITES.zMid, FX + 45, FY + 5, FORCE) end
+    if f >= 2 then draw(SPRITES.zBig, FX + 50, FY, FORCE) end
+  end
+end
+
+local function frogAndMode(linked, low, critical)
   local fm = linked and getValue("FM") or 0
   local name, armed, blocked, failsafe = "NO LINK", false, false, false
   if type(fm) == "string" then name, armed, blocked, failsafe = parseMode(fm) end
 
-  draw("frog", FX, FY, FORCE)
-  if linked and not armed then draw("zzz", FX + 45, FY, FORCE) end
-
+  local mood = (failsafe or critical) and "dizzy" or low and "tired" or armed and "awake" or "asleep"
+  drawFrog(mood, linked, getTime())
   modeBox(name, armed and not (failsafe and not blinkOn()), blocked)
 end
 
@@ -284,7 +295,7 @@ end
 local function run(event)
   background()
   lcd.clear()
-  local rq, rqWarn = getRSSI()          -- RQly for ELRS/CRSF, 0 when no telemetry
+  local rq, rqWarn, rqCrit = getRSSI()  -- RQly for ELRS/CRSF, 0 when no telemetry
   local linked = rq > 0
   linkWedge(linked and getValue("TQly") or 0, rq, rqWarn)
 
@@ -296,7 +307,7 @@ local function run(event)
   end
   droneBattery(pct, low)
   percent(pct, low)
-  frogAndMode(linked)
+  frogAndMode(linked, low, linked and rq < rqCrit)
   radioBattery()
   times()
   return 0

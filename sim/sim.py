@@ -67,7 +67,7 @@ class LCD:
         if f & RIGHT: s.last_left, s.last_right = right - width, orig
         else: s.last_left, s.last_right = orig, right
 
-def run(script, tel, blink_on):
+def run(script, tel, blink_on, t=None):
     L = lua53.LuaRuntime(unpack_returned_tuples=True); g = L.globals(); lcd = LCD(blink_on); buzz = []
     def I(v):
         if isinstance(v, float):
@@ -99,7 +99,7 @@ def run(script, tel, blink_on):
     g.getRSSI = lambda: (min(99, tel.get('rq', 0)), 45, 42)
     g.getGeneralSettings = lambda: L.table_from({'battMin': 6.6, 'battMax': 8.4, 'battWarn': 6.8})
     g.getDateTime = lambda: L.table_from({'hour': 15, 'min': 42})
-    g.getTime = lambda: 10 if blink_on else 80
+    g.getTime = lambda: t if t is not None else (10 if blink_on else 80)
     g.playHaptic = lambda *a: buzz.append(a)
     mod = L.execute(open(script).read())
     mod.run(0)
@@ -116,30 +116,41 @@ def to_img(px, scale=4):
                 d.rectangle([(x + 1) * scale, (y + 1) * scale, (x + 2) * scale - 1, (y + 2) * scale - 1], fill=on)
     return im
 
+def tel(rq, tq, tx, bat=None, v=None, fm=None, t=0):
+    d = dict(rq=rq, tx=tx, t=t)
+    if rq: d.update({'TQly': tq, 'Bat%': bat, 'RxBt': v, 'FM': fm})
+    return d
+
+def labelled(im, name):
+    c = Image.new('RGB', (im.width, im.height + 22), (255, 255, 255))
+    ImageDraw.Draw(c).text((6, 4), name, fill=(0, 0, 0)); c.paste(im, (0, 22)); return c
+
+def sheet(imgs, cols=2, pad=10):
+    rows = math.ceil(len(imgs) / cols); w, h = imgs[0].size
+    out = Image.new('RGB', (cols * w + (cols + 1) * pad, rows * h + (rows + 1) * pad), (255, 255, 255))
+    for i, im in enumerate(imgs): out.paste(im, (pad + (i % cols) * (w + pad), pad + (i // cols) * (h + pad)))
+    return out
+
+ARMED, READY, BLOCKED = tel(99, 98, 7.9, 87, 3.9, 'AIR', 83), tel(99, 99, 8.2, 100, 4.3, 'AIR*'), tel(80, 85, 7.6, 64, 4.0, 'ANGL!')
+LOW, FAILSAFE, WEAK = tel(90, 92, 7.5, 18, 3.5, 'AIR', 312), tel(12, 30, 7.4, 41, 3.8, '!FS!', 401), tel(30, 64, 7.6, 58, 3.8, 'HOR', 200)
+NOLINK = tel(0, 0, 6.7)
+STATES = [  # name, telemetry, time in 10 ms ticks
+    ("armed, acro", ARMED, 10), ("armed, blinking", ARMED, 405),
+    ("disarmed, ready (z step 1)", READY, 10), ("disarmed, ready (z step 2)", READY, 70),
+    ("disarmed, ready (z step 3)", READY, 130), ("disarmed, arming blocked", BLOCKED, 10),
+    ("low drone battery: tired", LOW, 60), ("low drone battery: slow blink", LOW, 310),
+    ("failsafe: dizzy (spin 1)", FAILSAFE, 10), ("failsafe: dizzy (spin 2)", FAILSAFE, 20),
+    ("link critical: dizzy", WEAK, 40), ("no link, radio battery low", NOLINK, 10),
+]
+ANIM = [("awake (armed)", ARMED), ("asleep (disarmed)", READY), ("tired (low battery)", LOW), ("dizzy (failsafe)", FAILSAFE)]
+
 if __name__ == '__main__':
     script, out = sys.argv[1], sys.argv[2]
-    def T(rq, tq, tx, bat=None, v=None, fm=None, t=0):
-        d = dict(rq=rq, tx=tx, t=t)
-        if rq: d.update({'TQly': tq, 'Bat%': bat, 'RxBt': v, 'FM': fm})
-        return d
-    S = [
-        ("armed, acro",                 T(99, 98, 7.9, 87, 3.9, 'AIR', 83), True),
-        ("disarmed, ready",             T(99, 99, 8.2, 100, 4.3, 'AIR*'), True),
-        ("disarmed, arming blocked",    T(80, 85, 7.6, 64, 4.0, 'ANGL!'), True),
-        ("link weak + asymmetric (A)",  T(44, 70, 7.5, 52, 3.8, 'HOR'), True),
-        ("low drone batt (frame A)",    T(90, 92, 7.5, 18, 3.5, 'AIR', 312), True),
-        ("low drone batt (frame B)",    T(90, 92, 7.5, 18, 3.5, 'AIR', 312), False),
-        ("failsafe (A)",                T(12, 30, 7.4, 41, 3.8, '!FS!'), True),
-        ("failsafe (B)",                T(12, 30, 7.4, 41, 3.8, '!FS!'), False),
-        ("no link, radio low",          T(0, 0, 6.7), True),
-    ]
-    imgs = []
-    for name, tel, ph in S:
-        im = to_img(run(script, tel, ph)); lab = Image.new('RGB', (im.width, 22), (255, 255, 255))
-        ImageDraw.Draw(lab).text((6, 4), name, fill=(0, 0, 0))
-        c = Image.new('RGB', (im.width, im.height + 22), (255, 255, 255)); c.paste(lab, (0, 0)); c.paste(im, (0, 22)); imgs.append(c)
-    cols = 2; rows = math.ceil(len(imgs) / cols); w, h = imgs[0].size
-    sheet = Image.new('RGB', (cols * w + (cols + 1) * 10, rows * h + (rows + 1) * 10), (255, 255, 255))
-    for i, im in enumerate(imgs): sheet.paste(im, (10 + (i % cols) * (w + 10), 10 + (i // cols) * (h + 10)))
-    sheet.save(out); print('saved', out, sheet.size)
-    big = to_img(run(script, S[0][1], True), scale=8); big.save(out.replace('.png', '_big.png')); print('saved big')
+    imgs = [labelled(to_img(run(script, tl, (t % 100) < 50, t)), n) for n, tl, t in STATES]
+    sheet(imgs).save(out); print('saved', out)
+    to_img(run(script, ARMED, True, 10), scale=8).save(out.replace('.png', '_big.png')); print('saved big')
+    frames = []
+    for t in range(0, 480, 5):                        # 4.8 s at 20 fps
+        frames.append(sheet([labelled(to_img(run(script, tl, (t % 100) < 50, t), scale=3), n) for n, tl in ANIM]))
+    gif = out.replace('.png', '_anim.gif')
+    frames[0].save(gif, save_all=True, append_images=frames[1:], duration=50, loop=0); print('saved', gif)
