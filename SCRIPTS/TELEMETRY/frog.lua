@@ -40,6 +40,8 @@ local FACE = {
     smile = { 14, 11, 1, 35, 11, 1, 15, 12, 5, 30, 12, 5, 20, 13, 10 },
     frown = { 15, 12, 20, 14, 13, 1, 35, 13, 1 },
     wavy = { 14, 12, 2, 18, 12, 2, 22, 12, 2, 26, 12, 2, 30, 12, 2, 34, 12, 2, 16, 13, 2, 20, 13, 2, 24, 13, 2, 28, 13, 2, 32, 13, 2 },
+    wide = { 15, 12, 20 },
+    snore = { 23, 11, 4, 22, 12, 1, 27, 12, 1, 22, 13, 1, 27, 13, 1, 23, 14, 4 },
   },
 }
 -- SPRITES END
@@ -242,7 +244,7 @@ local FX, FY = 39, 1                -- frog position (50 x 32, centred on x = 63
 --   dizzy  failsafe or link critical   spiral eyes spinning, wobbly mouth
 --   tired  drone battery low           heavy eyelids, corners of the mouth down, slow blinks
 --   awake  armed                       eyes open, blinks every few seconds
---   asleep disarmed / no link          eyes closed, z's rising (only with a link)
+--   asleep disarmed / no link          eyes closed, breathing: wide mouth / open "o" (z's only with a link)
 local function drawFrog(mood, linked, t)
   local eyes, mouth = FACE.eyes.open, FACE.mouth.smile
   if mood == "dizzy" then
@@ -251,6 +253,7 @@ local function drawFrog(mood, linked, t)
     eyes, mouth = ((t % 300) < 45) and FACE.eyes.closed or FACE.eyes.tired, FACE.mouth.frown
   elseif mood == "asleep" then
     eyes = FACE.eyes.closed
+    mouth = ((t // 60) % 4 >= 2) and FACE.mouth.snore or FACE.mouth.wide   -- 2.4 s breath, in step with the z's
   elseif (t % 400) < 15 then
     eyes = FACE.eyes.blink                                                    -- 150 ms blink every 4 s
   end

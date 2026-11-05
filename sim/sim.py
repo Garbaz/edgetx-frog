@@ -137,7 +137,8 @@ NOLINK = tel(0, 0, 6.7)
 STATES = [  # name, telemetry, time in 10 ms ticks
     ("armed, acro", ARMED, 10), ("armed, blinking", ARMED, 405),
     ("disarmed, ready (z step 1)", READY, 10), ("disarmed, ready (z step 2)", READY, 70),
-    ("disarmed, ready (z step 3)", READY, 130), ("disarmed, arming blocked", BLOCKED, 10),
+    ("disarmed, ready (z step 3)", READY, 130), ("disarmed, ready (z step 4)", READY, 190),
+    ("disarmed, arming blocked", BLOCKED, 10),
     ("low drone battery: tired", LOW, 60), ("low drone battery: slow blink", LOW, 310),
     ("failsafe: dizzy (spin 1)", FAILSAFE, 10), ("failsafe: dizzy (spin 2)", FAILSAFE, 20),
     ("link critical: dizzy", WEAK, 40), ("no link, radio battery low", NOLINK, 10),

@@ -32,6 +32,8 @@ MOUTHS = {
     'frown': [(14, 13)] + [(x, 12) for x in range(15, 25)],                     # corners down
     'wavy':  [(14, 12), (15, 12), (18, 12), (19, 12), (22, 12), (23, 12),
               (16, 13), (17, 13), (20, 13), (21, 13), (24, 13)],
+    'wide':  [(x, 12) for x in range(15, 25)],                                  # asleep, breathing in
+    'snore': [(23, 11), (24, 11), (22, 12), (22, 13), (23, 14), (24, 14)],      # asleep, the open o of 😴
 }
 
 def base():
