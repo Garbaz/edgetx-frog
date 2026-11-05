@@ -259,7 +259,7 @@ local FX, FY = 39, 1                -- frog position (50 x 32, centred on x = 63
 local function breath(t) return (t // BEAT) % 6 end
 
 -- armed: every 24 beats (9.6 s) a fly buzzes in, alternately from the left and the right; the frog
--- stops bouncing, stares at it, catches it with its tongue and gulps it down.
+-- hops excitedly while it comes in, stares at it, keeps still to catch it with its tongue and gulps it down.
 -- Beats 0..5 nothing, 6..15 fly flying in, 16 tongue out, 17 tongue back with the fly, 18..19 gulp.
 local HUNT = 24
 local function hunt(t)
@@ -272,6 +272,7 @@ local function hunt(t)
   if h < 16 * BEAT then                                             -- flying in on a wobbly path
     local p = (h - 6 * BEAT) / (10 * BEAT)
     r.fx, r.fy = mx(math.floor(19 + 17 * p + 0.5), 4), math.floor(7 + 4 * math.sin(p * 5 * math.pi) + 0.5)
+    r.flying = true
   elseif h < 18 * BEAT then                                         -- tongue out to the fly, then back
     local f = (h < 17 * BEAT) and math.min(1, (h - 16 * BEAT) / 16) or (1 - (h - 17 * BEAT) / BEAT)
     local tx, ty = 63 + f * (mx(38) - 63), (FY + 13) + f * (8 - (FY + 13))
@@ -321,7 +322,10 @@ local function drawFrog(mood, t)
     mouth = FACE.mouth.grin
     y = FY + 1 - beat % 2                                                   -- bounce: 1 px up every other beat
     if fly then
-      y = FY                                                                -- keeps still while hunting
+      y = FY                                                                -- still for the catch and the gulp
+      if fly.flying then                                                    -- excited: 2 px hops, twice as fast
+        y = ((t // (BEAT // 2)) % 2 == 0) and FY + 2 or FY
+      end
       eyes = (fly.side < 0) and FACE.eyes.lookLeft or FACE.eyes.lookRight  -- and stares at the fly
       if fly.gulp then eyes, mouth = FACE.eyes.closed, FACE.mouth.smile end -- gulp, eyes shut with delight
     end
