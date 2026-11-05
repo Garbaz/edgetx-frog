@@ -1,4 +1,4 @@
-# edgetx-frog
+# EdgeTX FROG Telemetry Screen
 
 A telemetry screen for EdgeTX radios with a 128×64 B&W display, for Betaflight quads over ELRS/CRSF. It shows:
 
