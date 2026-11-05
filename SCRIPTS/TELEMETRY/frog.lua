@@ -38,7 +38,9 @@ local FACE = {
   },
   mouth = {
     smile = { 14, 11, 1, 35, 11, 1, 15, 12, 5, 30, 12, 5, 20, 13, 10 },
-    frown = { 15, 12, 20, 14, 13, 1, 35, 13, 1 },
+    neutral = { 18, 12, 14 },
+    yawn1 = { 23, 11, 4, 22, 12, 6, 23, 13, 4 },
+    yawn2 = { 22, 10, 6, 21, 11, 8, 20, 12, 10, 20, 13, 10, 21, 14, 8, 22, 15, 6 },
     wavy = { 14, 12, 2, 18, 12, 2, 22, 12, 2, 26, 12, 2, 30, 12, 2, 34, 12, 2, 16, 13, 2, 20, 13, 2, 24, 13, 2, 28, 13, 2, 32, 13, 2 },
     wide = { 15, 12, 20 },
     snore = { 23, 11, 4, 22, 12, 1, 27, 12, 1, 22, 13, 1, 27, 13, 1, 23, 14, 4 },
@@ -122,8 +124,11 @@ local function clamp(v, lo, hi)
   return v
 end
 
+-- one clock for every animation: a 0.4 s beat (getTime() counts 10 ms ticks); all periods are
+-- whole multiples of it and everything lines up again every 4.8 s, so nothing drifts apart
+local BEAT = 40
 local function blinkOn()
-  return (getTime() % 100) < 50          -- 1 Hz, getTime() is in 10 ms ticks
+  return (getTime() % (2 * BEAT)) < BEAT                -- flashing: 0.4 s on, 0.4 s off
 end
 
 -- ink width of a text in pixels (EdgeTX adds a blank column after each glyph)
@@ -201,7 +206,7 @@ end
 local function percent(pct, low)
   local txt = pct and string.format("%d", pct) or "--"
   local x = BX - 1 + (BW + 2 - inkWidth(txt, "MID")) // 2
-  lcd.drawText(x, 52, txt, MIDSIZE + (low and (INVERS + BLINK) or 0))
+  lcd.drawText(x, 52, txt, MIDSIZE + ((low and blinkOn()) and INVERS or 0))
 end
 
 -- Betaflight sends the mode name, plus "*" (ready to arm) or "!" (arming blocked) while disarmed
@@ -240,31 +245,36 @@ end
 
 local FX, FY = 39, 1                -- frog position (50 x 32, centred on x = 63.5)
 
+-- sleeping breath: 6 beats = 2.4 s; beats 0..2 breathing out, 3..5 breathing in
+local function breath(t) return (t // BEAT) % 6 end
+
 -- the frog's mood, most urgent first:
 --   dizzy  failsafe or link critical   spiral eyes spinning, wobbly mouth
---   tired  drone battery low           heavy eyelids, corners of the mouth down, slow blinks
+--   tired  drone battery low           heavy eyelids, yawns every 4.8 s
 --   awake  armed                       eyes open, blinks every few seconds
 --   asleep disarmed / no link          eyes closed, breathing: wide mouth / open "o" (z's only with a link)
 local function drawFrog(mood, linked, t)
   local eyes, mouth = FACE.eyes.open, FACE.mouth.smile
   if mood == "dizzy" then
-    eyes, mouth = FACE.eyes.spiral[(t // 15) % 4 + 1], FACE.mouth.wavy      -- quarter turn every 150 ms
+    eyes, mouth = FACE.eyes.spiral[(t // (BEAT // 4)) % 4 + 1], FACE.mouth.wavy   -- one turn per beat
   elseif mood == "tired" then
-    eyes, mouth = ((t % 300) < 45) and FACE.eyes.closed or FACE.eyes.tired, FACE.mouth.frown
+    local y = (t // BEAT) % 12                                              -- yawn in the last 4 of 12 beats
+    eyes = (y == 9 or y == 10 or y == 11) and FACE.eyes.closed or FACE.eyes.tired
+    mouth = (y == 9 or y == 10) and FACE.mouth.yawn2 or (y == 8 or y == 11) and FACE.mouth.yawn1 or FACE.mouth.neutral
   elseif mood == "asleep" then
     eyes = FACE.eyes.closed
-    mouth = ((t // 60) % 4 >= 2) and FACE.mouth.snore or FACE.mouth.wide   -- 2.4 s breath, in step with the z's
-  elseif (t % 400) < 15 then
-    eyes = FACE.eyes.blink                                                    -- 150 ms blink every 4 s
+    mouth = (breath(t) < 3) and FACE.mouth.snore or FACE.mouth.wide            -- out: "o", in: wide
+  elseif (t % (12 * BEAT)) < 15 then
+    eyes = FACE.eyes.blink                                                    -- 150 ms blink every 4.8 s
   end
   draw(FROG, FX, FY, FORCE)
   draw(eyes, FX, FY, FORCE)
   draw(mouth, FX, FY, FORCE)
   if mood == "asleep" and linked then
-    local f = (t // 60) % 4                                                   -- 0.6 s per step
-    if f <= 2 then draw(SPRITES.zSmall, FX + 41, FY + 10, FORCE) end
-    if f >= 1 then draw(SPRITES.zMid, FX + 45, FY + 5, FORCE) end
-    if f >= 2 then draw(SPRITES.zBig, FX + 50, FY, FORCE) end
+    local b = breath(t)                       -- z's appear one by one while breathing out, fade while in
+    if b <= 2 then draw(SPRITES.zSmall, FX + 41, FY + 10, FORCE) end
+    if b >= 1 and b <= 3 then draw(SPRITES.zMid, FX + 45, FY + 5, FORCE) end
+    if b >= 2 and b <= 4 then draw(SPRITES.zBig, FX + 50, FY, FORCE) end
   end
 end
 
@@ -287,7 +297,7 @@ local lastBuzz = -1000
 local function background()
   if getRSSI() > 0 and getValue("FM") == "!FS!" then
     local t = getTime()
-    if t - lastBuzz >= 200 then           -- double buzz every 2 s
+    if t - lastBuzz >= 6 * BEAT then      -- double buzz every 2.4 s
       playHaptic(40, 20)
       playHaptic(40, 0)
       lastBuzz = t

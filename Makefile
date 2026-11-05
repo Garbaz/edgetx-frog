@@ -13,6 +13,7 @@ preview:
 check:
 	$(PY) sim/check_layout.py $(LUA)
 	$(PY) sim/check_center.py $(LUA)
+	$(PY) sim/check_loop.py $(LUA)
 
 .venv:
 	python3 -m venv .venv && .venv/bin/pip install -r requirements.txt

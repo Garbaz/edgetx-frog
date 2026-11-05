@@ -29,7 +29,11 @@ EYES = {
 }
 MOUTHS = {
     'smile': SMILE,
-    'frown': [(14, 13)] + [(x, 12) for x in range(15, 25)],                     # corners down
+    'neutral': [(x, 12) for x in range(18, 25)],                                # tired, between yawns
+    'yawn1': [(23, 11), (24, 11), (22, 12), (23, 12), (24, 12), (23, 13), (24, 13)],   # yawn opening / closing
+    'yawn2': ([(22, 10), (23, 10), (24, 10)] + [(x, 11) for x in range(21, 25)]        # big yawn, wide open
+              + [(x, 12) for x in range(20, 25)] + [(x, 13) for x in range(20, 25)]
+              + [(x, 14) for x in range(21, 25)] + [(22, 15), (23, 15), (24, 15)]),
     'wavy':  [(14, 12), (15, 12), (18, 12), (19, 12), (22, 12), (23, 12),
               (16, 13), (17, 13), (20, 13), (21, 13), (24, 13)],
     'wide':  [(x, 12) for x in range(15, 25)],                                  # asleep, breathing in
