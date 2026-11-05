@@ -177,7 +177,7 @@ STATES = [  # name, telemetry, time in 10 ms ticks (one frog beat = 40 ticks)
     ("no link: breathing in, Z", NOLINK, 170), ("no link: breathing in", NOLINK, 210),
     ("anxious (low battery)", LOW_READY, 30), ("anxious: glance at the battery", LOW_READY, 70),
     ("anxious: sweat running down", LOW_READY, 100),
-    ("radio battery low: glance left", RADIO_LOW, 70), ("both low: glance right", BOTH_LOW, 70), ("both low: then left", BOTH_LOW, 190), ("armed, low battery", LOW, 100),
+    ("radio battery low: glance left", RADIO_LOW, 70), ("both low: glance right", BOTH_LOW, 30), ("both low: pilot, briefly", BOTH_LOW, 65), ("both low: glance left", BOTH_LOW, 90), ("armed, low battery", LOW, 100),
     ("failsafe: dizzy", FAILSAFE, 10), ("link critical: dizzy", WEAK, 20),
 ]
 FLIGHT_STILLS = [  # name, time in ticks along the scripted flight (armed, one session)

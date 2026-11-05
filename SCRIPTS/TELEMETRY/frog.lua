@@ -368,9 +368,13 @@ local function drawFrog(mood, t, droneLow, radioLow)
     eyes = FACE.eyes.closed
     mouth = (breath(t) < 3) and FACE.mouth.snore or FACE.mouth.wide            -- out: "o", in: wide
   elseif mood == "anxious" then
-    local glance = (t % 120) >= 60 and (t % 120) < 90                       -- 0.3 s at the battery every 1.2 s:
-    local right = droneLow and not (radioLow and (t // 120) % 2 == 1)      -- both low: right, left, right, ...
-    eyes = glance and (right and FACE.eyes.atDrone or FACE.eyes.atRadio) or FACE.eyes.wide
+    local c = t % 120                                                       -- every 1.2 s:
+    if droneLow and radioLow then                                           -- 0.45 s right, 0.15 s at the pilot,
+      eyes = (c >= 15 and c < 60) and FACE.eyes.atDrone                     -- 0.45 s left, 0.15 s at the pilot
+             or (c >= 75) and FACE.eyes.atRadio or FACE.eyes.wide
+    else                                                                    -- 0.3 s at the one low battery
+      eyes = (c >= 60 and c < 90) and (droneLow and FACE.eyes.atDrone or FACE.eyes.atRadio) or FACE.eyes.wide
+    end
     mouth = FACE.mouth.grimace
   elseif mood == "excited" then
     local L, R, C = FACE.eyes.lookLeft, FACE.eyes.lookRight, FACE.eyes.open
