@@ -70,6 +70,7 @@ class LCD:
 VIBRATED = set()
 
 def run(script, tel, blink_on, t=None):
+    if t is not None: blink_on = bool(t & 64)           # EdgeTX: BLINK_ON_PHASE = bit 6 of the 10 ms clock
     L = lua53.LuaRuntime(unpack_returned_tuples=True); g = L.globals(); lcd = LCD(blink_on); buzz = []
     def I(v):
         if isinstance(v, float):
@@ -149,7 +150,7 @@ STATES = [  # name, telemetry, time in 10 ms ticks (one beat = 40 ticks)
 ]
 ANIM = [("armed", ARMED), ("disarmed, ready", READY), ("disarmed, arming blocked", BLOCKED),
         ("low drone battery", LOW), ("failsafe", FAILSAFE), ("link critical", WEAK), ("no link, radio battery low", NOLINK)]
-LOOP = 480        # ticks (10 ms): 4.8 s, every animation period divides it (all on the 0.4 s beat)
+LOOP = 1920       # ticks (10 ms): 19.2 s = frog loop (4.8 s) and EdgeTX blink (1.28 s) lining up
 STEP = 5          # 20 fps
 
 if __name__ == '__main__':

@@ -124,11 +124,13 @@ local function clamp(v, lo, hi)
   return v
 end
 
--- one clock for every animation: a 0.4 s beat (getTime() counts 10 ms ticks); all periods are
--- whole multiples of it and everything lines up again every 4.8 s, so nothing drifts apart
+-- Two clocks, deliberately unrelated:
+-- * warnings flash with EdgeTX's own BLINK timing (bit 6 of the 10 ms clock that getTime() returns:
+--   0.64 s on, 0.64 s off), so text uses the BLINK flag and shapes follow the same phase here
+-- * the frog animates on its own 0.4 s beat; all its periods are whole beats (loop of 4.8 s)
 local BEAT = 40
 local function blinkOn()
-  return (getTime() % (2 * BEAT)) < BEAT                -- flashing: 0.4 s on, 0.4 s off
+  return (getTime() % 128) < 64                          -- shown while EdgeTX's BLINK text is shown
 end
 
 -- ink width of a text in pixels (EdgeTX adds a blank column after each glyph)
@@ -206,7 +208,7 @@ end
 local function percent(pct, low)
   local txt = pct and string.format("%d", pct) or "--"
   local x = BX - 1 + (BW + 2 - inkWidth(txt, "MID")) // 2
-  lcd.drawText(x, 52, txt, MIDSIZE + ((low and blinkOn()) and INVERS or 0))
+  lcd.drawText(x, 52, txt, MIDSIZE + (low and (INVERS + BLINK) or 0))
 end
 
 -- Betaflight sends the mode name, plus "*" (ready to arm) or "!" (arming blocked) while disarmed
