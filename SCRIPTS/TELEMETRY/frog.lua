@@ -308,9 +308,9 @@ local function drawFrog(mood, t)
     eyes, mouth = FACE.eyes.spiral[(t // (BEAT // 4)) % 4 + 1], FACE.mouth.wavy   -- one turn per beat
   elseif mood == "tired" then
     local y = t % 384                    -- yawn every 3.84 s (divides the 19.2 s loop): 0.2 s opening,
-    local wide = y >= 284 and y < 354    -- 0.7 s wide open with the eyes shut, 0.2 s closing
-    eyes = (y >= 284 and y < 374) and FACE.eyes.closed or FACE.eyes.tired
-    mouth = wide and FACE.mouth.yawn2 or ((y >= 264 and y < 284) or (y >= 354 and y < 374)) and FACE.mouth.yawn1
+    local wide = y >= 254 and y < 354    -- 1.0 s wide open with the eyes shut, 0.2 s closing
+    eyes = (y >= 254 and y < 374) and FACE.eyes.closed or FACE.eyes.tired
+    mouth = wide and FACE.mouth.yawn2 or ((y >= 234 and y < 254) or (y >= 354 and y < 374)) and FACE.mouth.yawn1
             or FACE.mouth.neutral
   elseif mood == "asleep" then
     eyes = FACE.eyes.closed
