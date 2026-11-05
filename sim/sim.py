@@ -147,13 +147,17 @@ def sheet(imgs, cols=2, pad=10):
 
 def flight(t):
     """Scripted flight for the armed preview (t in ticks, loops every 1920):
-    1.0-7.5 s throttle 30..60 %, tilting up to 0.6 rad -> fly from the left, circling; cut at 7.5 s -> catch
-    9.6-16.5 s throttle 85 %, tilting 0.9 rad -> fly from the right, circling fast; cut at 16.5 s -> catch"""
+    0.5 s arm; 1.0-7.5 s throttle 30..60 %, tilting up to 0.6 rad -> fly from the left, circling;
+    7.5 s throttle down to 8 % (below the 10 % catch threshold, not zero) -> catch
+    9.6-16.5 s throttle 85 %, tilting 0.9 rad -> fly from the right, circling fast;
+    16.5 s disarm with the throttle still up -> catch, then the resting frog until re-arming"""
     s = (t % 1920) / 100
     thr, tilt = 0.0, 0.0
     if 1.0 <= s < 7.5: thr, tilt = 0.3 + 0.3 * (s - 1.0) / 6.5, 0.6 * min(1, (s - 1.0) / 3)
-    elif 9.6 <= s < 16.5: thr, tilt = 0.85, 0.9
-    d = tel(99, 98, 7.9, 87, 3.9, 'AIR', 83)
+    elif 7.5 <= s < 9.6: thr = 0.08
+    elif 9.6 <= s < 17.0: thr, tilt = 0.85, 0.9
+    armed = 0.5 <= s < 16.5
+    d = tel(99, 98, 7.9, 87, 3.9, 'AIR' if armed else 'AIR*', 83)
     d.update({'thr': -1024 + 2048 * thr, 'Ptch': tilt, 'Roll': 0.0})
     return d
 
@@ -169,9 +173,10 @@ STATES = [  # name, telemetry, time in 10 ms ticks (one frog beat = 40 ticks)
     ("failsafe: dizzy", FAILSAFE, 10), ("link critical: dizzy", WEAK, 20),
 ]
 FLIGHT_STILLS = [  # name, time in ticks along the scripted flight (armed, one session)
-    ("armed, throttle 0: calm", 50), ("throttle up: a fly comes in", 115), ("fly circling (in front)", 250),
-    ("fly circling (behind the frog)", 330), ("throttle cut: tongue out", 755), ("tongue back with the fly", 770),
+    ("armed, throttle 0: calm", 75), ("throttle up: a fly comes in", 115), ("fly circling (in front)", 250),
+    ("fly circling (behind the frog)", 330), ("throttle 8 %: tongue out", 755), ("tongue back with the fly", 770),
     ("gulp", 800), ("85 % throttle: big fast hops, fly from the right", 1000), ("fast circling", 1300),
+    ("disarm: tongue out", 1655), ("disarm: gulp", 1700), ("disarmed: resting", 1800),
 ]
 ANIM = [("armed: scripted flight", flight), ("disarmed: resting", READY), ("disarmed: arming blocked", BLOCKED),
         ("low drone battery", LOW), ("failsafe", FAILSAFE), ("link critical", WEAK), ("no link: asleep, radio battery low", NOLINK)]

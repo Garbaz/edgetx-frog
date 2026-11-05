@@ -266,13 +266,17 @@ local function breath(t) return (t // BEAT) % 6 end
 --   rises, 2 px high above half throttle
 -- * while the throttle is up a fly circles the frog (behind it on the back half of the orbit), the
 --   faster the more the drone tilts (tilt ~ speed); the frog follows it with its eyes
--- * the moment the throttle hits zero the frog catches the fly with its tongue and gulps it down;
---   raising the throttle again brings a new fly in from the side, alternating left and right
+-- * the moment the throttle drops below 10 % (or the drone disarms) the frog catches the fly with its
+--   tongue and gulps it down, before going back to resting when disarmed; raising the throttle above
+--   15 % again brings a new fly in from the side, alternating left and right (the gap between the two
+--   thresholds keeps a stick hovering around one of them from flickering)
 local ORBIT_X, ORBIT_Y, ORBIT_RX, ORBIT_RY = 63.5, 15, 32, 14
 local TONGUE_OUT, TONGUE_BACK, GULP = 12, 18, 60        -- ticks (10 ms)
 local ENTER = 50                                       -- ticks for a new fly to fly in from the side
+local THR_LOW, THR_HIGH = 0.10, 0.15                   -- throttle: catch below, new fly above
 local hop = { phase = 0 }
 local fly = { state = "gone", side = 1 }               -- gone / entering / circling / caught
+local flying = false
 local lastT
 
 local function throttle()                               -- 0..1 from the throttle stick
@@ -283,11 +287,13 @@ local function orbitPos(a)                              -- top-left of the 5x3 f
   return math.floor(ORBIT_X + ORBIT_RX * math.cos(a) - 2 + 0.5), math.floor(ORBIT_Y + ORBIT_RY * math.sin(a) - 1 + 0.5)
 end
 
-local function updateFlight(t)
+local function updateFlight(t, armed)
   local dt = lastT and clamp(t - lastT, 0, 20) / 100 or 0  -- seconds; capped when the screen was away
   lastT = t
   local thr = throttle()
-  local flying = thr > 0.03
+  if not armed then flying = false
+  elseif flying then flying = thr >= THR_LOW
+  else flying = thr > THR_HIGH end
   if flying then hop.phase = hop.phase + (1.25 + 3.75 * thr) * dt else hop.phase = 0 end
   hop.height = flying and ((thr > 0.5) and 2 or 1) or 0
 
@@ -299,7 +305,7 @@ local function updateFlight(t)
     fly.side = -fly.side
     fly.state, fly.timer, fly.angle = "entering", 0, (fly.side < 0) and math.pi or 0
   elseif (fly.state == "entering" or fly.state == "circling") and not flying then
-    fly.state, fly.timer = "caught", 0                  -- throttle cut: snap!
+    fly.state, fly.timer = "caught", 0                  -- throttle cut or disarm: snap!
   end
   if fly.state == "entering" or fly.state == "circling" then
     local tilt = math.sqrt(getValue("Ptch") ^ 2 + getValue("Roll") ^ 2)       -- radians
@@ -403,10 +409,12 @@ local function frogAndMode(linked, low, critical)
   local name, armed, blocked, failsafe = "NO LINK", false, false, false
   if type(fm) == "string" then name, armed, blocked, failsafe = parseMode(fm) end
 
-  local mood = not linked and "asleep" or (failsafe or critical) and "dizzy" or low and "tired"
-               or armed and "active" or "resting"
   local t = getTime()
-  if armed then updateFlight(t) else fly.state, lastT = "gone", nil end
+  if armed or fly.state ~= "gone" then updateFlight(t, armed) else lastT = nil end
+  if not linked then fly.state, flying, lastT = "gone", false, nil end
+  local catching = fly.state == "caught"               -- also finishes the catch after a disarm
+  local mood = not linked and "asleep" or (failsafe or critical) and "dizzy" or low and "tired"
+               or (armed or catching) and "active" or "resting"
   drawFrog(mood, t)
   modeBox(name, armed and not (failsafe and not blinkOn()), blocked)
 end
