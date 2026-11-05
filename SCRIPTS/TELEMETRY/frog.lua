@@ -51,6 +51,10 @@ local FACE = {
 }
 -- SPRITES END
 
+-- armed: a fly buzzing in (two wing positions)
+local FLY_UP   = { "##.##", ".###.", "....." }
+local FLY_DOWN = { ".....", ".###.", "##.##" }
+
 -- sleeping frog: three z's of growing size, rising one after the other
 local Z_SMALL = { "###", ".#.", "###" }
 local Z_MID   = { "####", "..#.", ".#..", "####" }
@@ -114,7 +118,8 @@ local function runs(sprite)
 end
 
 local SPRITES = { bolt = runs(BOLT), stopwatch = runs(STOPWATCH), clock = runs(CLOCK), radioCap = runs(RADIO_CAP),
-                  zSmall = runs(Z_SMALL), zMid = runs(Z_MID), zBig = runs(Z_BIG) }
+                  zSmall = runs(Z_SMALL), zMid = runs(Z_MID), zBig = runs(Z_BIG),
+                  flyUp = runs(FLY_UP), flyDown = runs(FLY_DOWN) }
 
 local function draw(r, x, y, flags)
   for i = 1, #r, 3 do
@@ -253,10 +258,46 @@ local FX, FY = 39, 1                -- frog position (50 x 32, centred on x = 63
 -- sleeping breath: 6 beats = 2.4 s; beats 0..2 breathing out, 3..5 breathing in
 local function breath(t) return (t // BEAT) % 6 end
 
+-- armed: every 24 beats (9.6 s) a fly buzzes in, alternately from the left and the right; the frog
+-- stops bouncing, stares at it, catches it with its tongue and gulps it down.
+-- Beats 0..5 nothing, 6..15 fly flying in, 16 tongue out, 17 tongue back with the fly, 18..19 gulp.
+local HUNT = 24
+local function hunt(t)
+  local cycle = t % (2 * HUNT * BEAT)
+  local side = (cycle < HUNT * BEAT) and -1 or 1                    -- -1: fly on the left, 1: right
+  local h = cycle % (HUNT * BEAT)                                   -- ticks into this hunt
+  local function mx(x, w) return (side < 0) and x or (127 - x - (w or 0)) end
+  if h < 6 * BEAT or h >= 20 * BEAT then return nil end
+  local r = { side = side }
+  if h < 16 * BEAT then                                             -- flying in on a wobbly path
+    local p = (h - 6 * BEAT) / (10 * BEAT)
+    r.fx, r.fy = mx(math.floor(19 + 17 * p + 0.5), 4), math.floor(7 + 4 * math.sin(p * 5 * math.pi) + 0.5)
+  elseif h < 18 * BEAT then                                         -- tongue out to the fly, then back
+    local f = (h < 17 * BEAT) and math.min(1, (h - 16 * BEAT) / 16) or (1 - (h - 17 * BEAT) / BEAT)
+    local tx, ty = 63 + f * (mx(38) - 63), (FY + 13) + f * (8 - (FY + 13))
+    r.tongue = { math.floor(tx + 0.5), math.floor(ty + 0.5) }
+    if h < 16 * BEAT + 16 then r.fx, r.fy = mx(36, 4), 7               -- fly waits until the tongue arrives
+    else r.fx, r.fy = r.tongue[1] - 2, r.tongue[2] - 1 end             -- then rides on the tip
+  else
+    r.gulp = true
+  end
+  return r
+end
+
+local function tongue(x1, y1)                                       -- 2 px wide, from the mouth
+  local x0, y0 = 63, FY + 13
+  local n = math.max(math.abs(x1 - x0), math.abs(y1 - y0), 1)
+  for i = 0, n do
+    local x, y = math.floor(x0 + (x1 - x0) * i / n + 0.5), math.floor(y0 + (y1 - y0) * i / n + 0.5)
+    lcd.drawFilledRectangle(x, y, 2, 1, FORCE)
+  end
+  lcd.drawFilledRectangle(x1 - 1, y1 - 1, 3, 3, FORCE)               -- sticky tip
+end
+
 -- the frog's mood, most urgent first:
 --   dizzy   failsafe or link critical   spiral eyes spinning, wobbly mouth
 --   tired   drone battery low           heavy eyelids, yawns every 4.8 s
---   active  armed                       open grin, glancing left and right, bouncing on the beat
+--   active  armed                       open grin, glancing left and right, bouncing; hunts flies
 --   resting disarmed                    eyes open, smiling, blinks every 4.8 s
 --   asleep  no link                     eyes closed, breathing (wide mouth / open "o"), z's rising
 local function drawFrog(mood, t)
@@ -271,18 +312,30 @@ local function drawFrog(mood, t)
   elseif mood == "asleep" then
     eyes = FACE.eyes.closed
     mouth = (breath(t) < 3) and FACE.mouth.snore or FACE.mouth.wide            -- out: "o", in: wide
-  elseif mood == "active" then
+  end
+  local fly
+  if mood == "active" then
+    fly = hunt(t)
     local b = beat % 12                                                     -- look around: centre, left, centre, right
     eyes = (b == 4 or b == 5) and FACE.eyes.lookLeft or (b == 10 or b == 11) and FACE.eyes.lookRight or FACE.eyes.open
     mouth = FACE.mouth.grin
     y = FY + 1 - beat % 2                                                   -- bounce: 1 px up every other beat
+    if fly then
+      y = FY                                                                -- keeps still while hunting
+      eyes = (fly.side < 0) and FACE.eyes.lookLeft or FACE.eyes.lookRight  -- and stares at the fly
+      if fly.gulp then eyes, mouth = FACE.eyes.closed, FACE.mouth.smile end -- gulp, eyes shut with delight
+    end
   end
-  if (mood == "resting" or mood == "active") and (t % (12 * BEAT)) < 15 then
+  if (mood == "resting" or mood == "active") and not (fly and fly.gulp) and (t % (12 * BEAT)) < 15 then
     eyes = FACE.eyes.blink                                                  -- 150 ms blink every 4.8 s
   end
   draw(FROG, FX, y, FORCE)
   draw(eyes, FX, y, FORCE)
   draw(mouth, FX, y, FORCE)
+  if fly then
+    if fly.tongue then tongue(fly.tongue[1], fly.tongue[2]) end
+    if fly.fx then draw(((t // 5) % 2 == 0) and SPRITES.flyUp or SPRITES.flyDown, fly.fx, fly.fy, FORCE) end
+  end
   if mood == "asleep" then
     local b = breath(t)                       -- z's appear one by one while breathing out, fade while in
     if b <= 2 then draw(SPRITES.zSmall, FX + 41, FY + 10, FORCE) end

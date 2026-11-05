@@ -139,8 +139,12 @@ ARMED, READY, BLOCKED = tel(99, 98, 7.9, 87, 3.9, 'AIR', 83), tel(99, 99, 8.2, 1
 LOW, FAILSAFE, WEAK = tel(90, 92, 7.5, 18, 3.5, 'AIR', 312), tel(12, 30, 7.4, 41, 3.8, '!FS!', 401), tel(30, 64, 7.6, 58, 3.8, 'HOR', 200)
 NOLINK = tel(0, 0, 6.7)
 STATES = [  # name, telemetry, time in 10 ms ticks (one frog beat = 40 ticks)
-    ("armed: active", ARMED, 90), ("armed: bounce up, looking left", ARMED, 210),
-    ("armed: looking right", ARMED, 400), ("armed: blinking", ARMED, 485),
+    ("armed: active", ARMED, 90), ("armed: bounce up, looking left", ARMED, 170),
+    ("armed: looking right", ARMED, 1810), ("armed: blinking", ARMED, 485),
+    ("armed: a fly buzzes in", ARMED, 420), ("armed: fly hovering, frog stares", ARMED, 630),
+    ("armed: tongue out", ARMED, 652), ("armed: got it", ARMED, 662),
+    ("armed: tongue back with the fly", ARMED, 700), ("armed: gulp", ARMED, 740),
+    ("armed: next fly, from the right", ARMED, 1450), ("armed: tongue out to the right", ARMED, 1622),
     ("disarmed: resting", READY, 100), ("disarmed: arming blocked", BLOCKED, 100),
     ("no link: breathing out, z", NOLINK, 10), ("no link: breathing out, z z", NOLINK, 50),
     ("no link: breathing out, z z Z", NOLINK, 90), ("no link: breathing in, z Z", NOLINK, 130),
