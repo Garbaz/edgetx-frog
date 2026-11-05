@@ -67,6 +67,8 @@ class LCD:
         if f & RIGHT: s.last_left, s.last_right = right - width, orig
         else: s.last_left, s.last_right = orig, right
 
+VIBRATED = set()
+
 def run(script, tel, blink_on, t=None):
     L = lua53.LuaRuntime(unpack_returned_tuples=True); g = L.globals(); lcd = LCD(blink_on); buzz = []
     def I(v):
@@ -103,7 +105,8 @@ def run(script, tel, blink_on, t=None):
     g.playHaptic = lambda *a: buzz.append(a)
     mod = L.execute(open(script).read())
     mod.run(0)
-    if buzz: print('  vibrate:', tel.get('FM'), buzz)
+    if buzz and tel.get('FM') not in VIBRATED:
+        VIBRATED.add(tel.get('FM')); print('  vibrate:', tel.get('FM'), buzz)
     return lcd.px
 
 def to_img(px, scale=4):
@@ -143,15 +146,21 @@ STATES = [  # name, telemetry, time in 10 ms ticks
     ("failsafe: dizzy (spin 1)", FAILSAFE, 10), ("failsafe: dizzy (spin 2)", FAILSAFE, 20),
     ("link critical: dizzy", WEAK, 40), ("no link, radio battery low", NOLINK, 10),
 ]
-ANIM = [("awake (armed)", ARMED), ("asleep (disarmed)", READY), ("tired (low battery)", LOW), ("dizzy (failsafe)", FAILSAFE)]
+ANIM = [("armed", ARMED), ("disarmed, ready", READY), ("disarmed, arming blocked", BLOCKED),
+        ("low drone battery", LOW), ("failsafe", FAILSAFE), ("link critical", WEAK), ("no link, radio battery low", NOLINK)]
+LOOP = 1200       # ticks (10 ms): 12 s, where blink (4 s), breathing (2.4 s), tired blink (3 s) and flashing (1 s) all line up
+STEP = 5          # 20 fps
 
 if __name__ == '__main__':
-    script, out = sys.argv[1], sys.argv[2]
+    script, out = sys.argv[1], sys.argv[2]                       # out: preview.png
+    # still sheet with the individual animation steps
     imgs = [labelled(to_img(run(script, tl, (t % 100) < 50, t)), n) for n, tl, t in STATES]
-    sheet(imgs).save(out); print('saved', out)
+    sheet(imgs).save(out.replace('.png', '_states.png')); print('saved', out.replace('.png', '_states.png'))
     to_img(run(script, ARMED, True, 10), scale=8).save(out.replace('.png', '_big.png')); print('saved big')
-    frames = []
-    for t in range(0, 480, 5):                        # 4.8 s at 20 fps
-        frames.append(sheet([labelled(to_img(run(script, tl, (t % 100) < 50, t), scale=3), n) for n, tl in ANIM]))
-    gif = out.replace('.png', '_anim.gif')
-    frames[0].save(gif, save_all=True, append_images=frames[1:], duration=50, loop=0); print('saved', gif)
+    # seamless 12 s loop of every state, as animated PNG (APNG) and animated WebP
+    frames = [sheet([labelled(to_img(run(script, tl, (t % 100) < 50, t), scale=3), n) for n, tl in ANIM])
+              for t in range(0, LOOP, STEP)]
+    frames[0].save(out, save_all=True, append_images=frames[1:], duration=STEP * 10, loop=0, optimize=True)
+    frames[0].save(out.replace('.png', '.webp'), save_all=True, append_images=frames[1:], duration=STEP * 10,
+                   loop=0, lossless=True, method=4)
+    print('saved', out, 'and', out.replace('.png', '.webp'), f'({len(frames)} frames)')
