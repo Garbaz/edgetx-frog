@@ -192,6 +192,8 @@ LOW_FLIGHT_STILLS = [  # the same flight with a low battery: anxious frog, the f
 ]
 ANIM = [("armed: scripted flight", flight), ("disarmed: resting", READY), ("disarmed: arming blocked", BLOCKED),
         ("low battery: anxious", LOW_READY), ("radio battery low", RADIO_LOW), ("both batteries low", BOTH_LOW), ("low battery while flying", low_flight), ("failsafe", FAILSAFE), ("link critical", WEAK), ("no link: asleep, radio battery low", NOLINK)]
+README = [("armed: hunting the fly", flight), ("disarmed: resting", READY), ("arming blocked", BLOCKED),
+          ("low battery: anxious", low_flight), ("failsafe: dizzy", FAILSAFE), ("no link: asleep", NOLINK)]
 LOOP = 1920       # ticks (10 ms): 19.2 s = frog loop (4.8 s), EdgeTX blink (1.28 s) and the scripted flight
 STEP = 5          # 20 fps
 
@@ -205,14 +207,15 @@ def flight_frames(script, times, profile=flight):
         if t in want: out[t] = px
     return [out[t] for t in times]
 
-def loop_frames(script, scale=3, loops=1):
-    """Frames of every ANIM panel over LOOP, after one warm-up loop so the stateful armed panel is seamless."""
-    sessions = [Session(script) for _ in ANIM]
+def loop_frames(script, scale=3, loops=1, panels=None):
+    """Frames of every panel (default ANIM) over LOOP, after one warm-up loop so the stateful panels are seamless."""
+    panels = panels or ANIM
+    sessions = [Session(script) for _ in panels]
     for t in range(0, LOOP, STEP):
-        for ses, (_, tl) in zip(sessions, ANIM): ses.frame(at(tl, t), t)
+        for ses, (_, tl) in zip(sessions, panels): ses.frame(at(tl, t), t)
     frames = []
     for t in range(LOOP, LOOP * (1 + loops), STEP):
-        frames.append([ses.frame(at(tl, t), t) for ses, (_, tl) in zip(sessions, ANIM)])
+        frames.append([ses.frame(at(tl, t), t) for ses, (_, tl) in zip(sessions, panels)])
     return frames
 
 if __name__ == '__main__':
@@ -231,3 +234,8 @@ if __name__ == '__main__':
     frames[0].save(out.replace('.png', '.webp'), save_all=True, append_images=frames[1:], duration=STEP * 10,
                    loop=0, lossless=True, method=4)
     print('saved', out, 'and', out.replace('.png', '.webp'), f'({len(frames)} frames)')
+    # README: six representative states, 3 x 2, as GIF (plays everywhere on GitHub; 4 colours)
+    frames = [sheet([labelled(to_img(px, scale=3), n) for px, (n, _) in zip(panels, README)], cols=3).quantize(colors=8)
+              for panels in loop_frames(script, panels=README)]
+    frames[0].save('readme.gif', save_all=True, append_images=frames[1:], duration=STEP * 10, loop=0, optimize=True)
+    print('saved readme.gif')

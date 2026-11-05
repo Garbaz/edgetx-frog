@@ -1,3 +1,8 @@
 __pycache__/
 *.pyc
 .venv/
+# generated previews (make preview); readme.gif stays tracked for the README
+/*.png
+/*.webp
+art/**/*.png
+art/drafts/gen_out.txt

@@ -7,7 +7,7 @@ A telemetry screen for EdgeTX radios with a 128×64 B&W display, for Betaflight 
 - a frog whose mood and antics follow the flight, with the flight mode in a box below it
 - the radio battery, the clock and the flight timer along the bottom
 
-![preview](preview.webp)
+![preview](readme.gif)
 
 ## Install
 
@@ -22,7 +22,7 @@ The frog art and the face parts are drawn in Python in `art/`. `sim/` renders th
 
 ```sh
 make .venv   # once
-make         # regenerate sprites in frog.lua, render previews, run checks
+make         # regenerate sprites in frog.lua, render previews (untracked) and readme.gif, run checks
 ```
 
 The fonts in `sim/fonts/` come from EdgeTX (GPL-2.0).
