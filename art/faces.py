@@ -8,6 +8,8 @@ def mirror(pts): return sorted(set(pts) | {(W - 1 - x, y) for x, y in pts})
 PUPIL = [(17, 3), (18, 3)] + [(x, 4) for x in range(15, 20)] + [(x, 5) for x in range(16, 19)]
 SMILE = [(14, 11)] + [(x, 12) for x in range(15, 20)] + [(x, 13) for x in range(20, 25)]
 
+SMALL_PUPIL = [(x, y) for y in (3, 4, 5) for x in (16, 17, 18)]
+
 SPIRAL = ["#####",
           "....#",
           "###.#",
@@ -25,21 +27,20 @@ EYES = {
     'open':   PUPIL,                                                            # resting / armed
     'blink':  [(x, 4) for x in range(14, 21)],                                  # mid-blink: straight lid
     'closed': [(14, 4), (20, 4)] + [(x, 5) for x in range(15, 20)],             # asleep: curved lid
-    'tired':  [(x, 3) for x in range(14, 21)] + [(x, 4) for x in range(15, 20)] + [(x, 5) for x in range(16, 19)],
+    'wide':   SMALL_PUPIL,                                                      # anxious: wide-eyed, small pupils
 }
 # armed, looking around: both pupils shift the same way (not mirrored, or the frog goes cross-eyed)
-def gaze(dx): return sorted({(x + dx, y) for x, y in PUPIL} | {(W - 1 - x + dx, y) for x, y in PUPIL})
-GAZE = {'lookLeft': gaze(-1), 'lookRight': gaze(1)}
+def gaze(dx, dy=0, p=PUPIL): return sorted({(x + dx, y + dy) for x, y in p} | {(W - 1 - x + dx, y + dy) for x, y in p})
+GAZE = {'lookLeft': gaze(-1), 'lookRight': gaze(1),
+        'wideLeft': gaze(-1, 0, SMALL_PUPIL), 'wideRight': gaze(1, 0, SMALL_PUPIL),
+        'wideBattery': gaze(2, 1, SMALL_PUPIL)}                                 # anxious: a glance at the drone battery
 
 MOUTHS = {
     'smile': SMILE,
     'grin':  [(14, 11)] + [(x, 12) for x in range(15, 25)] + [(x, 13) for x in range(17, 25)]   # armed: open grin
              + [(x, 14) for x in range(20, 25)],
-    'neutral': [(x, 12) for x in range(18, 25)],                                # tired, between yawns
-    'yawn1': [(23, 11), (24, 11), (22, 12), (23, 12), (24, 12), (23, 13), (24, 13)],   # yawn opening / closing
-    'yawn2': ([(22, 10), (23, 10), (24, 10)] + [(x, 11) for x in range(21, 25)]        # big yawn, wide open
-              + [(x, 12) for x in range(20, 25)] + [(x, 13) for x in range(20, 25)]
-              + [(x, 14) for x in range(21, 25)] + [(22, 15), (23, 15), (24, 15)]),
+    'grimace': ([(x, 11) for x in range(17, 25)] + [(x, 13) for x in range(17, 25)]    # anxious: clenched teeth
+                + [(17, 12), (20, 12), (23, 12)]),
     'wavy':  [(14, 12), (15, 12), (18, 12), (19, 12), (22, 12), (23, 12),
               (16, 13), (17, 13), (20, 13), (21, 13), (24, 13)],
     'wide':  [(x, 12) for x in range(15, 25)],                                  # asleep, breathing in

@@ -161,15 +161,20 @@ def flight(t):
     d.update({'thr': -1024 + 2048 * thr, 'Ptch': tilt, 'Roll': 0.0})
     return d
 
+def low_flight(t):
+    d = flight(t); d.update({'Bat%': 18, 'RxBt': 3.5}); return d
+
 ARMED, READY, BLOCKED = tel(99, 98, 7.9, 87, 3.9, 'AIR', 83), tel(99, 99, 8.2, 100, 4.3, 'AIR*'), tel(80, 85, 7.6, 64, 4.0, 'ANGL!')
 LOW, FAILSAFE, WEAK = tel(90, 92, 7.5, 18, 3.5, 'AIR', 312), tel(12, 30, 7.4, 41, 3.8, '!FS!', 401), tel(30, 64, 7.6, 58, 3.8, 'HOR', 200)
 NOLINK = tel(0, 0, 6.7)
+LOW_READY = tel(90, 92, 7.5, 18, 3.5, 'AIR*')
 STATES = [  # name, telemetry, time in 10 ms ticks (one frog beat = 40 ticks)
     ("disarmed: resting", READY, 100), ("disarmed: arming blocked", BLOCKED, 100),
     ("no link: breathing out, z", NOLINK, 10), ("no link: breathing out, z z", NOLINK, 50),
     ("no link: breathing out, z z Z", NOLINK, 90), ("no link: breathing in, z Z", NOLINK, 130),
     ("no link: breathing in, Z", NOLINK, 170), ("no link: breathing in", NOLINK, 210),
-    ("tired (low battery)", LOW, 10), ("tired: yawn opening", LOW, 240), ("tired: big yawn", LOW, 300),
+    ("anxious (low battery)", LOW_READY, 30), ("anxious: glance at the battery", LOW_READY, 70),
+    ("anxious: sweat running down", LOW_READY, 100), ("anxious: shiver", LOW_READY, 185), ("armed, low battery", LOW, 100),
     ("failsafe: dizzy", FAILSAFE, 10), ("link critical: dizzy", WEAK, 20),
 ]
 FLIGHT_STILLS = [  # name, time in ticks along the scripted flight (armed, one session)
@@ -179,7 +184,7 @@ FLIGHT_STILLS = [  # name, time in ticks along the scripted flight (armed, one s
     ("disarm: tongue out", 1655), ("disarm: gulp", 1700), ("disarmed: resting", 1800),
 ]
 ANIM = [("armed: scripted flight", flight), ("disarmed: resting", READY), ("disarmed: arming blocked", BLOCKED),
-        ("low drone battery", LOW), ("failsafe", FAILSAFE), ("link critical", WEAK), ("no link: asleep, radio battery low", NOLINK)]
+        ("low battery: anxious", LOW_READY), ("low battery while flying", low_flight), ("failsafe", FAILSAFE), ("link critical", WEAK), ("no link: asleep, radio battery low", NOLINK)]
 LOOP = 1920       # ticks (10 ms): 19.2 s = frog loop (4.8 s), EdgeTX blink (1.28 s) and the scripted flight
 STEP = 5          # 20 fps
 

@@ -31,9 +31,12 @@ local FACE = {
     open = { 17, 3, 2, 31, 3, 2, 15, 4, 5, 30, 4, 5, 16, 5, 3, 31, 5, 3 },
     blink = { 14, 4, 7, 29, 4, 7 },
     closed = { 14, 4, 1, 20, 4, 1, 29, 4, 1, 35, 4, 1, 15, 5, 5, 30, 5, 5 },
-    tired = { 14, 3, 7, 29, 3, 7, 15, 4, 5, 30, 4, 5, 16, 5, 3, 31, 5, 3 },
+    wide = { 16, 3, 3, 31, 3, 3, 16, 4, 3, 31, 4, 3, 16, 5, 3, 31, 5, 3 },
     lookLeft = { 16, 3, 2, 30, 3, 2, 14, 4, 5, 29, 4, 5, 15, 5, 3, 30, 5, 3 },
     lookRight = { 18, 3, 2, 32, 3, 2, 16, 4, 5, 31, 4, 5, 17, 5, 3, 32, 5, 3 },
+    wideLeft = { 15, 3, 3, 30, 3, 3, 15, 4, 3, 30, 4, 3, 15, 5, 3, 30, 5, 3 },
+    wideRight = { 17, 3, 3, 32, 3, 3, 17, 4, 3, 32, 4, 3, 17, 5, 3, 32, 5, 3 },
+    wideBattery = { 18, 4, 3, 33, 4, 3, 18, 5, 3, 33, 5, 3, 18, 6, 3, 33, 6, 3 },
     spiral = {
       { 15, 2, 5, 30, 2, 5, 19, 3, 1, 30, 3, 1, 15, 4, 3, 19, 4, 1, 30, 4, 1, 32, 4, 3, 15, 5, 1, 19, 5, 1, 30, 5, 1, 34, 5, 1, 15, 6, 5, 30, 6, 5 },
       { 15, 2, 3, 19, 2, 1, 30, 2, 1, 32, 2, 3, 15, 3, 1, 17, 3, 1, 19, 3, 1, 30, 3, 1, 32, 3, 1, 34, 3, 1, 15, 4, 1, 17, 4, 1, 19, 4, 1, 30, 4, 1, 32, 4, 1, 34, 4, 1, 15, 5, 1, 19, 5, 1, 30, 5, 1, 34, 5, 1, 15, 6, 5, 30, 6, 5 },
@@ -44,9 +47,7 @@ local FACE = {
   mouth = {
     smile = { 14, 11, 1, 35, 11, 1, 15, 12, 5, 30, 12, 5, 20, 13, 10 },
     grin = { 14, 11, 1, 35, 11, 1, 15, 12, 20, 17, 13, 16, 20, 14, 10 },
-    neutral = { 18, 12, 14 },
-    yawn1 = { 23, 11, 4, 22, 12, 6, 23, 13, 4 },
-    yawn2 = { 22, 10, 6, 21, 11, 8, 20, 12, 10, 20, 13, 10, 21, 14, 8, 22, 15, 6 },
+    grimace = { 17, 11, 16, 17, 12, 1, 20, 12, 1, 23, 12, 1, 26, 12, 1, 29, 12, 1, 32, 12, 1, 17, 13, 16 },
     wavy = { 14, 12, 2, 18, 12, 2, 22, 12, 2, 26, 12, 2, 30, 12, 2, 34, 12, 2, 16, 13, 2, 20, 13, 2, 24, 13, 2, 28, 13, 2, 32, 13, 2 },
     wide = { 15, 12, 20 },
     snore = { 23, 11, 4, 22, 12, 1, 27, 12, 1, 22, 13, 1, 27, 13, 1, 23, 14, 4 },
@@ -57,6 +58,9 @@ local FACE = {
 -- armed: a fly buzzing in (two wing positions)
 local FLY_UP   = { "##.##", ".###.", "....." }
 local FLY_DOWN = { ".....", ".###.", "##.##" }
+
+-- low battery: a nervous sweat drop
+local SWEAT = { "..#..", ".#.#.", "#...#", "#...#", ".###." }
 
 -- sleeping frog: three z's of growing size, rising one after the other
 local Z_SMALL = { "###", ".#.", "###" }
@@ -122,7 +126,7 @@ end
 
 local SPRITES = { bolt = runs(BOLT), stopwatch = runs(STOPWATCH), clock = runs(CLOCK), radioCap = runs(RADIO_CAP),
                   zSmall = runs(Z_SMALL), zMid = runs(Z_MID), zBig = runs(Z_BIG),
-                  flyUp = runs(FLY_UP), flyDown = runs(FLY_DOWN) }
+                  flyUp = runs(FLY_UP), flyDown = runs(FLY_DOWN), sweat = runs(SWEAT) }
 
 local function draw(r, x, y, flags)
   for i = 1, #r, 3 do
@@ -340,35 +344,38 @@ end
 
 -- the frog's mood, most urgent first:
 --   dizzy   failsafe or link critical   spiral eyes spinning, wobbly mouth
---   tired   drone battery low           heavy eyelids, yawns every 3.84 s
 --   active  armed                       open grin, hops with the throttle, hunts the circling fly
+--   anxious drone battery low           wide eyes glancing at the battery, clenched teeth, sweat drop;
+--                                       while armed on top of the active frog (still hunting the fly)
 --   resting disarmed                    eyes open, smiling, blinks every 4.8 s
 --   asleep  no link                     eyes closed, breathing (wide mouth / open "o"), z's rising
-local function drawFrog(mood, t)
+local function drawFrog(mood, t, low)
   local beat = t // BEAT
-  local eyes, mouth, y = FACE.eyes.open, FACE.mouth.smile, FY
+  local eyes, mouth, y, dx = FACE.eyes.open, FACE.mouth.smile, FY, 0
+  local anxious = low and (mood == "active" or mood == "resting")
+  local glance = anxious and (t % 120) >= 60 and (t % 120) < 90   -- 0.3 s look at the battery every 1.2 s
   if mood == "dizzy" then
     eyes, mouth = FACE.eyes.spiral[(t // (BEAT // 4)) % 4 + 1], FACE.mouth.wavy   -- one turn per beat
-  elseif mood == "tired" then
-    local y = t % 384                    -- yawn every 3.84 s (divides the 19.2 s loop): 0.2 s opening,
-    local wide = y >= 254 and y < 354    -- 1.0 s wide open with the eyes shut, 0.2 s closing
-    eyes = (y >= 254 and y < 374) and FACE.eyes.closed or FACE.eyes.tired
-    mouth = wide and FACE.mouth.yawn2 or ((y >= 234 and y < 254) or (y >= 354 and y < 374)) and FACE.mouth.yawn1
-            or FACE.mouth.neutral
   elseif mood == "asleep" then
     eyes = FACE.eyes.closed
     mouth = (breath(t) < 3) and FACE.mouth.snore or FACE.mouth.wide            -- out: "o", in: wide
+  elseif anxious then
+    eyes, mouth = glance and FACE.eyes.wideBattery or FACE.eyes.wide, FACE.mouth.grimace
+    local p = t % 240
+    if mood == "resting" and p >= 180 and p < 200 then dx = ((t // 5) % 2 == 0) and 1 or -1 end  -- a shiver
   end
   local catch                                                               -- tongue tip while catching
   if mood == "active" then
-    mouth = FACE.mouth.grin
+    local L, R, C = FACE.eyes.lookLeft, FACE.eyes.lookRight, FACE.eyes.open
+    if anxious then L, R, C = FACE.eyes.wideLeft, FACE.eyes.wideRight, FACE.eyes.wide end
+    mouth = anxious and FACE.mouth.grimace or FACE.mouth.grin
     y = FY + 2 - ((hop.phase % 1 < 0.5) and hop.height or 0)               -- crouched, hopping with the throttle
     local b = beat % 12                                                     -- no fly: look around
-    eyes = (b == 4 or b == 5) and FACE.eyes.lookLeft or (b == 10 or b == 11) and FACE.eyes.lookRight or FACE.eyes.open
+    eyes = (b == 4 or b == 5) and L or (b == 10 or b == 11) and R or C
     if fly.state == "entering" or fly.state == "circling" then              -- eyes on the fly
-      eyes = (fly.x + 2 < 57) and FACE.eyes.lookLeft or (fly.x + 2 > 70) and FACE.eyes.lookRight or FACE.eyes.open
+      eyes = (fly.x + 2 < 57) and L or (fly.x + 2 > 70) and R or C
     elseif fly.state == "caught" then
-      eyes = (fly.x + 2 < 63) and FACE.eyes.lookLeft or FACE.eyes.lookRight
+      eyes = (fly.x + 2 < 63) and L or R
       local f = fly.timer
       if f < TONGUE_OUT + TONGUE_BACK then
         local k = (f < TONGUE_OUT) and (f / TONGUE_OUT) or (1 - (f - TONGUE_OUT) / TONGUE_BACK)
@@ -379,6 +386,7 @@ local function drawFrog(mood, t)
         eyes, mouth = FACE.eyes.closed, FACE.mouth.smile                     -- gulp, eyes shut with delight
       end
     end
+    if glance and fly.state ~= "caught" then eyes = FACE.eyes.wideBattery end
   end
   if (mood == "resting" or mood == "active") and not (fly.state == "caught" and fly.timer >= TONGUE_OUT + TONGUE_BACK)
      and (t % (12 * BEAT)) < 15 then
@@ -387,10 +395,13 @@ local function drawFrog(mood, t)
   local showFly = mood == "active" and (fly.state == "entering" or fly.state == "circling"
                                         or (fly.state == "caught" and fly.timer < TONGUE_OUT))
   if showFly and fly.behind then drawFly(t, fly.x, fly.y) end               -- behind: the frog covers it
-  draw(FROG_MASK, FX, y, ERASE)
-  draw(FROG, FX, y, FORCE)
-  draw(eyes, FX, y, FORCE)
-  draw(mouth, FX, y, FORCE)
+  draw(FROG_MASK, FX + dx, y, ERASE)
+  draw(FROG, FX + dx, y, FORCE)
+  draw(eyes, FX + dx, y, FORCE)
+  draw(mouth, FX + dx, y, FORCE)
+  if anxious and not (fly.state == "caught" and fly.timer >= TONGUE_OUT + TONGUE_BACK) and t % 240 < 120 then
+    draw(SPRITES.sweat, FX + dx + 39, y + 2 + (t % 240) // 15, FORCE)       -- sweat drop running down the cheek
+  end
   if showFly and not fly.behind then drawFly(t, fly.x, fly.y) end
   if catch then
     tongue(catch[1], catch[2], y)
@@ -413,9 +424,9 @@ local function frogAndMode(linked, low, critical)
   if armed or fly.state ~= "gone" then updateFlight(t, armed) else lastT = nil end
   if not linked then fly.state, flying, lastT = "gone", false, nil end
   local catching = fly.state == "caught"               -- also finishes the catch after a disarm
-  local mood = not linked and "asleep" or (failsafe or critical) and "dizzy" or low and "tired"
+  local mood = not linked and "asleep" or (failsafe or critical) and "dizzy"
                or (armed or catching) and "active" or "resting"
-  drawFrog(mood, t)
+  drawFrog(mood, t, low)
   modeBox(name, armed and not (failsafe and not blinkOn()), blocked)
 end
 
