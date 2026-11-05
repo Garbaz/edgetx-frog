@@ -142,15 +142,17 @@ end
 -- * warnings flash with EdgeTX's own BLINK timing (bit 6 of the 10 ms clock that getTime() returns:
 --   0.64 s on, 0.64 s off), so text uses the BLINK flag and shapes follow the same phase here
 -- * the frog animates on its own 0.4 s beat; all its periods are whole beats (loop of 4.8 s)
+-- run() reads the clock once and hands it down as t, so a whole frame shows one moment.
 local BEAT = 40
-local function blinkOn()
-  return (getTime() % 128) < 64                          -- shown while EdgeTX's BLINK text is shown
+local function blinkOn(t)
+  return (t % 128) < 64                                  -- shown while EdgeTX's BLINK text is shown
 end
 
--- ink width of a text in pixels (EdgeTX adds a blank column after each glyph)
+-- ink width of a text in pixels (EdgeTX adds a blank column after each glyph);
+-- a character missing from GLYPH_W counts as wide as "M" rather than stopping the script
 local function inkWidth(txt, font)
-  local w = -1
-  for i = 1, #txt do w = w + GLYPH_W[font][string.sub(txt, i, i)] + 1 end
+  local widths, w = GLYPH_W[font], -1
+  for i = 1, #txt do w = w + (widths[string.sub(txt, i, i)] or widths["M"]) + 1 end
   return w
 end
 
@@ -159,9 +161,9 @@ end
 -- Same footprint as the drone battery: 17 px wide, cap in rows 0..8, segments in rows 9..46.
 local LQ_AXIS, LQ_BOT = 9, 47                       -- x 1..17, y 1..47 (1 px screen margin)
 local LQ_SEGS, LQ_SEG_H, LQ_GAP = 5, 6, 2
-local function linkWedge(tq, rq, warn)
+local function linkWedge(tq, rq, warn, t)
   draw(SPRITES.radioCap, LQ_AXIS - 8, 1, FORCE)
-  local hide = (math.min(tq, rq) < warn) and not blinkOn()
+  local hide = (math.min(tq, rq) < warn) and not blinkOn(t)
   local lit = { math.ceil(LQ_SEGS * clamp(tq, 0, 100) / 100), math.ceil(LQ_SEGS * clamp(rq, 0, 100) / 100) }
   for k = 0, LQ_SEGS - 1 do                          -- k = 0 is the bottom segment
     local w = 4 + k                                  -- half width 4 px at the bottom, +1 px per segment
@@ -177,42 +179,14 @@ local function linkWedge(tq, rq, warn)
   end
 end
 
--- radio battery: small symbol under the link meter (x 2..16), on the same rows as the clock symbols
-local function radioBattery()
-  local s = getGeneralSettings()
-  local v = getValue("tx-voltage")
-  local pct = clamp((v - s.battMin) / (s.battMax - s.battMin), 0, 1)
-  local low = v < s.battWarn
-  if low and not blinkOn() then return low end          -- flashes when the radio battery is low
-  lcd.drawRectangle(2, 56, 13, 7, FORCE)
-  lcd.drawFilledRectangle(15, 58, 2, 3, FORCE)
-  local w = math.floor(9 * pct + 0.5)
-  if w > 0 then lcd.drawFilledRectangle(4, 58, w, 3, FORCE) end
-  return low
-end
-
--- clock and flight timer, mirrored around the screen axis x = 63.5, symbols on the outside
-local function times()
-  local t = getDateTime()
-  draw(SPRITES.clock, 29, 56, FORCE)
-  lcd.drawText(38, 57, string.format("%02d:%02d", t.hour, t.min), SMLSIZE)        -- ink x 38..58
-  local secs = math.min(math.floor(getValue("timer1")), 99 * 60 + 59)
-  lcd.drawText(69, 57, string.format("%02d:%02d", secs // 60, secs % 60), SMLSIZE) -- ink x 69..89
-  draw(SPRITES.stopwatch, 92, 56, FORCE)
-end
-
--- flight mode text, centred to the pixel: EdgeTX's CENTER flag counts the blank column after
--- each glyph and rounds, so the ink is measured here and the box width matched to its parity
--- screen is symmetric about x = 63.5 (link meter 1..17, battery 110..126)
-local INK = { MID = { flag = MIDSIZE, top = 1, h = 10 }, SML = { flag = SMLSIZE, top = 0, h = 6 } }
 -- drone battery: LAVA 1S pack standing up, connector housing and plug on top;
 -- x 110..126, y 1..47: mirrors the link meter (1 px screen margin)
 local BX, BY, BW, BH = 111, 10, 15, 38
-local function droneBattery(pct, low)
+local function droneBattery(pct, low, t)
   lcd.drawFilledRectangle(BX + 5, BY - 9, 5, 3, FORCE)          -- plug
   lcd.drawFilledRectangle(BX - 1, BY - 6, BW + 2, 6, FORCE)     -- connector housing
   lcd.drawRectangle(BX, BY, BW, BH, FORCE)
-  if pct ~= nil and not (low and not blinkOn()) then
+  if pct ~= nil and not (low and not blinkOn(t)) then
     local h = math.floor((BH - 4) * pct / 100 + 0.5)
     if h > 0 then lcd.drawFilledRectangle(BX + 2, BY + BH - 2 - h, BW - 4, h, FORCE) end
   end
@@ -221,13 +195,39 @@ end
 
 -- drone %, centred under the battery (x 110..126); no "%" sign so 100 still (nearly) fits,
 -- ink bottom on row 62 like the bottom row text
-local function percent(pct, low)
+local function dronePercent(pct, low)
   local txt = pct and string.format("%d", pct) or "--"
   local x = BX - 1 + (BW + 2 - inkWidth(txt, "MID")) // 2
   lcd.drawText(x, 52, txt, MIDSIZE + (low and (INVERS + BLINK) or 0))
 end
 
--- Betaflight sends the mode name, plus "*" (ready to arm) or "!" (arming blocked) while disarmed
+-- radio battery: small symbol under the link meter (x 2..16), on the same rows as the clock symbols;
+-- returns whether it is low
+local function radioBattery(t)
+  local s = getGeneralSettings()
+  local v = getValue("tx-voltage")
+  local pct = clamp((v - s.battMin) / (s.battMax - s.battMin), 0, 1)
+  local low = v < s.battWarn
+  if low and not blinkOn(t) then return low end         -- flashes when the radio battery is low
+  lcd.drawRectangle(2, 56, 13, 7, FORCE)
+  lcd.drawFilledRectangle(15, 58, 2, 3, FORCE)
+  local w = math.floor(9 * pct + 0.5)
+  if w > 0 then lcd.drawFilledRectangle(4, 58, w, 3, FORCE) end
+  return low
+end
+
+-- clock and flight timer, mirrored around the screen axis x = 63.5, symbols on the outside
+local function clockAndTimer()
+  local now = getDateTime()
+  draw(SPRITES.clock, 29, 56, FORCE)
+  lcd.drawText(38, 57, string.format("%02d:%02d", now.hour, now.min), SMLSIZE)    -- ink x 38..58
+  local secs = math.min(math.floor(getValue("timer1")), 99 * 60 + 59)
+  lcd.drawText(69, 57, string.format("%02d:%02d", secs // 60, secs % 60), SMLSIZE) -- ink x 69..89
+  draw(SPRITES.stopwatch, 92, 56, FORCE)
+end
+
+-- Betaflight sends the mode name, plus "*" (ready to arm) or "!" (arming blocked) while disarmed;
+-- returns the name to show, armed, blocked, failsafe
 local function parseMode(fm)
   if fm == "!FS!" then return "!FS!", true, false, true end
   local last = string.sub(fm, -1)
@@ -238,6 +238,10 @@ local function parseMode(fm)
   return MODES[fm] or fm, true, false, false
 end
 
+-- flight mode text, centred to the pixel: EdgeTX's CENTER flag counts the blank column after
+-- each glyph and rounds, so the ink is measured here and the box width matched to its parity
+-- screen is symmetric about x = 63.5 (link meter 1..17, battery 110..126)
+local INK = { MID = { flag = MIDSIZE, top = 1, h = 10 }, SML = { flag = SMLSIZE, top = 0, h = 6 } }
 local function modeBox(name, filled, dotted)
   local font = (#name > 5) and "SML" or "MID"
   local iw, ink = inkWidth(name, font), INK[font]
@@ -293,7 +297,7 @@ local function orbitPos(a)                              -- top-left of the 5x3 f
   return math.floor(ORBIT_X + ORBIT_RX * math.cos(a) - 2 + 0.5), math.floor(ORBIT_Y + ORBIT_RY * math.sin(a) - 1 + 0.5)
 end
 
-local function flyAround(fly) return fly.state == "entering" or fly.state == "circling" or fly.state == "leaving" end
+local function flyAround() return fly.state == "entering" or fly.state == "circling" or fly.state == "leaving" end
 local function gulped() return fly.state == "caught" and fly.timer >= TONGUE_OUT + TONGUE_BACK end
 
 local function updateFly(dt, hunter)
@@ -361,7 +365,7 @@ local function drawFrog(mood, t, droneLow, radioLow)
   local eyes, mouth = FACE.eyes.open, FACE.mouth.smile
   local y = FY + ((mood == "excited" or mood == "anxious") and hop.height > 0 and 2 or 0)   -- crouched to hop
           - ((hop.phase % 1 < 0.5) and hop.height or 0)
-  local catch                                                               -- tongue tip while catching
+  local tip                                                                 -- tongue tip while catching
   if mood == "dizzy" then
     eyes, mouth = FACE.eyes.spiral[(t // (BEAT // 4)) % 4 + 1], FACE.mouth.wavy   -- one turn per beat
   elseif mood == "asleep" then
@@ -381,7 +385,7 @@ local function drawFrog(mood, t, droneLow, radioLow)
     mouth = FACE.mouth.grin
     local b = beat % 12                                                     -- no fly: look around
     eyes = (b == 4 or b == 5) and L or (b == 10 or b == 11) and R or C
-    if flyAround(fly) then                                                  -- eyes on the fly
+    if flyAround() then                                                     -- eyes on the fly
       eyes = (fly.x + 2 < 57) and L or (fly.x + 2 > 70) and R or C
     elseif fly.state == "caught" then
       eyes = (fly.x + 2 < 63) and L or R
@@ -389,8 +393,8 @@ local function drawFrog(mood, t, droneLow, radioLow)
       if f < TONGUE_OUT + TONGUE_BACK then
         local k = (f < TONGUE_OUT) and (f / TONGUE_OUT) or (1 - (f - TONGUE_OUT) / TONGUE_BACK)
         local tx, ty = fly.x + 2, fly.y + 1
-        catch = { math.floor(63 + k * (tx - 63) + 0.5), math.floor((y + 13) + k * (ty - (y + 13)) + 0.5),
-                  f >= TONGUE_OUT }                                         -- third: fly is on the tip
+        tip = { x = math.floor(63 + k * (tx - 63) + 0.5), y = math.floor((y + 13) + k * (ty - (y + 13)) + 0.5),
+                withFly = f >= TONGUE_OUT }                                 -- on the way back
       else
         eyes, mouth = FACE.eyes.closed, FACE.mouth.smile                     -- gulp, eyes shut with delight
       end
@@ -399,7 +403,7 @@ local function drawFrog(mood, t, droneLow, radioLow)
   if (mood == "resting" or mood == "excited" or mood == "anxious") and not gulped() and (t % (12 * BEAT)) < 15 then
     eyes = FACE.eyes.blink                                                  -- 150 ms blink every 4.8 s
   end
-  local showFly = flyAround(fly) or (mood == "excited" and fly.state == "caught" and fly.timer < TONGUE_OUT)
+  local showFly = flyAround() or (mood == "excited" and fly.state == "caught" and fly.timer < TONGUE_OUT)
   if showFly and fly.behind then drawFly(t, fly.x, fly.y) end               -- behind: the frog covers it
   draw(FROG_MASK, FX, y, ERASE)
   draw(FROG, FX, y, FORCE)
@@ -409,9 +413,9 @@ local function drawFrog(mood, t, droneLow, radioLow)
     draw(SPRITES.sweat, FX + 37, y + 1 + (t % 240) // 20, FORCE)            -- the side of the head, touching it
   end
   if showFly and not fly.behind then drawFly(t, fly.x, fly.y) end
-  if catch then
-    tongue(catch[1], catch[2], y)
-    if catch[3] then drawFly(t, catch[1] - 2, catch[2] - 1) end
+  if tip then
+    tongue(tip.x, tip.y, y)
+    if tip.withFly then drawFly(t, tip.x - 2, tip.y - 1) end
   end
   if mood == "asleep" then
     local b = breath(t)                       -- z's appear one by one while breathing out, fade while in
@@ -421,12 +425,11 @@ local function drawFrog(mood, t, droneLow, radioLow)
   end
 end
 
-local function frogAndMode(linked, droneLow, radioLow, critical)
-  local fm = linked and getValue("FM") or 0
+-- fm: the FM sensor (a string, or 0 when there is none)
+local function frogAndMode(linked, fm, droneLow, radioLow, critical, t)
   local name, armed, blocked, failsafe = "NO LINK", false, false, false
   if type(fm) == "string" then name, armed, blocked, failsafe = parseMode(fm) end
 
-  local t = getTime()
   local mood = not linked and "asleep" or (failsafe or critical) and "dizzy"
                or (droneLow or radioLow) and "anxious"
                or (armed or fly.state == "caught") and "excited" or "resting"
@@ -443,46 +446,50 @@ local function frogAndMode(linked, droneLow, radioLow, critical)
     fly.state, flying, lastT, hop.phase, hop.height = "gone", false, nil, 0, 0
   end
   drawFrog(mood, t, droneLow, radioLow)
-  modeBox(name, armed and not (failsafe and not blinkOn()), blocked)
+  modeBox(name, armed and not (failsafe and not blinkOn(t)), blocked)
 end
 
 -- Vibration for the alarm situations:
 --   low drone voltage -> L01/SF1 in the model (RxBt < 3.6 V, repeats every 10 s)
 --   link critical     -> EdgeTX's own "RF signal critical" alarm (RQly < 42, vibrates with haptic mode "no keys")
 --   failsafe          -> here: FM is a text sensor, which logical switches cannot compare.
--- EdgeTX calls background() while this screen is not shown; run() calls it while it is.
+-- EdgeTX calls background() while this screen is not shown and run() while it is; both buzz.
 local lastBuzz = -1000
-local function background()
-  if getRSSI() > 0 and getValue("FM") == "!FS!" then
-    local t = getTime()
-    if t - lastBuzz >= 6 * BEAT then      -- double buzz every 2.4 s
-      playHaptic(40, 20)
-      playHaptic(40, 0)
-      lastBuzz = t
-    end
+local function buzzOnFailsafe(fm, t)
+  if fm == "!FS!" and t - lastBuzz >= 6 * BEAT then    -- double buzz every 2.4 s
+    playHaptic(40, 20)
+    playHaptic(40, 0)
+    lastBuzz = t
   end
 end
 
+local function background()
+  if getRSSI() > 0 then buzzOnFailsafe(getValue("FM"), getTime()) end
+end
+
 local function run(event)
-  background()
-  lcd.clear()
+  local t = getTime()
   local rq, rqWarn, rqCrit = getRSSI()  -- RQly for ELRS/CRSF, 0 when no telemetry
   local linked = rq > 0
-  linkWedge(linked and getValue("TQly") or 0, rq, rqWarn)
+  local fm = linked and getValue("FM") or 0
+  buzzOnFailsafe(fm, t)
 
-  local pct, low = nil, false
+  local droneLow, pct = false, nil
   if linked then
     local v = getValue("RxBt")          -- 0 when Betaflight sees no battery (e.g. on USB; needs report_cell_voltage ON)
     if v > 0 then
       pct = clamp(getValue("Bat%"), 0, 100)
-      low = v < DRONE_LOW_V
+      droneLow = v < DRONE_LOW_V
     end
   end
-  droneBattery(pct, low)
-  percent(pct, low)
-  local radioLow = radioBattery()
-  frogAndMode(linked, low, radioLow, linked and rq < rqCrit)
-  times()
+
+  lcd.clear()
+  linkWedge(linked and getValue("TQly") or 0, rq, rqWarn, t)
+  droneBattery(pct, droneLow, t)
+  dronePercent(pct, droneLow)
+  local radioLow = radioBattery(t)
+  frogAndMode(linked, fm, droneLow, radioLow, linked and rq < rqCrit, t)
+  clockAndTimer()
   return 0
 end
 
