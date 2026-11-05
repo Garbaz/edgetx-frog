@@ -472,9 +472,11 @@ local function run(event)
 
   local pct, low = nil, false
   if linked then
-    pct = clamp(getValue("Bat%"), 0, 100)
-    local v = getValue("RxBt")
-    low = v > 0 and v < DRONE_LOW_V
+    local v = getValue("RxBt")          -- 0 when Betaflight sees no battery (e.g. on USB; needs report_cell_voltage ON)
+    if v > 0 then
+      pct = clamp(getValue("Bat%"), 0, 100)
+      low = v < DRONE_LOW_V
+    end
   end
   droneBattery(pct, low)
   percent(pct, low)

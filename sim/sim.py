@@ -170,6 +170,7 @@ NOLINK = tel(0, 0, 6.7)
 LOW_READY = tel(90, 92, 7.5, 18, 3.5, 'AIR*')
 RADIO_LOW = tel(99, 99, 6.7, 100, 4.3, 'AIR*')
 BOTH_LOW = tel(90, 92, 6.7, 18, 3.5, 'AIR*')
+NO_BATT = tel(99, 99, 8.2, 100, 0.0, 'AIR!')   # drone on USB, no battery: Betaflight sends 0 V
 STATES = [  # name, telemetry, time in 10 ms ticks (one frog beat = 40 ticks)
     ("disarmed: resting", READY, 100), ("disarmed: arming blocked", BLOCKED, 100),
     ("no link: breathing out, z", NOLINK, 10), ("no link: breathing out, z z", NOLINK, 50),
@@ -178,7 +179,7 @@ STATES = [  # name, telemetry, time in 10 ms ticks (one frog beat = 40 ticks)
     ("anxious (low battery)", LOW_READY, 30), ("anxious: glance at the battery", LOW_READY, 70),
     ("anxious: sweat running down", LOW_READY, 100),
     ("radio battery low: glance left", RADIO_LOW, 70), ("both low: glance right", BOTH_LOW, 30), ("both low: pilot, briefly", BOTH_LOW, 65), ("both low: glance left", BOTH_LOW, 90), ("armed, low battery", LOW, 100),
-    ("failsafe: dizzy", FAILSAFE, 10), ("link critical: dizzy", WEAK, 20),
+    ("drone on USB, no battery", NO_BATT, 100), ("failsafe: dizzy", FAILSAFE, 10), ("link critical: dizzy", WEAK, 20),
 ]
 FLIGHT_STILLS = [  # name, time in ticks along the scripted flight (armed, one session)
     ("armed, throttle 0: calm", 75), ("throttle up: a fly comes in", 115), ("fly circling (in front)", 250),
