@@ -297,7 +297,7 @@ end
 
 -- the frog's mood, most urgent first:
 --   dizzy   failsafe or link critical   spiral eyes spinning, wobbly mouth
---   tired   drone battery low           heavy eyelids, yawns every 4.8 s
+--   tired   drone battery low           heavy eyelids, yawns every 3.84 s
 --   active  armed                       open grin, glancing left and right, bouncing; hunts flies
 --   resting disarmed                    eyes open, smiling, blinks every 4.8 s
 --   asleep  no link                     eyes closed, breathing (wide mouth / open "o"), z's rising
@@ -307,9 +307,11 @@ local function drawFrog(mood, t)
   if mood == "dizzy" then
     eyes, mouth = FACE.eyes.spiral[(t // (BEAT // 4)) % 4 + 1], FACE.mouth.wavy   -- one turn per beat
   elseif mood == "tired" then
-    local b = beat % 12                                                     -- yawn in the last 4 of 12 beats
-    eyes = (b == 9 or b == 10 or b == 11) and FACE.eyes.closed or FACE.eyes.tired
-    mouth = (b == 9 or b == 10) and FACE.mouth.yawn2 or (b == 8 or b == 11) and FACE.mouth.yawn1 or FACE.mouth.neutral
+    local y = t % 384                    -- yawn every 3.84 s (divides the 19.2 s loop): 0.2 s opening,
+    local wide = y >= 284 and y < 354    -- 0.7 s wide open with the eyes shut, 0.2 s closing
+    eyes = (y >= 284 and y < 374) and FACE.eyes.closed or FACE.eyes.tired
+    mouth = wide and FACE.mouth.yawn2 or ((y >= 264 and y < 284) or (y >= 354 and y < 374)) and FACE.mouth.yawn1
+            or FACE.mouth.neutral
   elseif mood == "asleep" then
     eyes = FACE.eyes.closed
     mouth = (breath(t) < 3) and FACE.mouth.snore or FACE.mouth.wide            -- out: "o", in: wide

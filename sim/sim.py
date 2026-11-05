@@ -149,7 +149,7 @@ STATES = [  # name, telemetry, time in 10 ms ticks (one frog beat = 40 ticks)
     ("no link: breathing out, z", NOLINK, 10), ("no link: breathing out, z z", NOLINK, 50),
     ("no link: breathing out, z z Z", NOLINK, 90), ("no link: breathing in, z Z", NOLINK, 130),
     ("no link: breathing in, Z", NOLINK, 170), ("no link: breathing in", NOLINK, 210),
-    ("tired (low battery)", LOW, 10), ("tired: big yawn", LOW, 370),
+    ("tired (low battery)", LOW, 10), ("tired: yawn opening", LOW, 270), ("tired: big yawn", LOW, 300),
     ("failsafe: dizzy", FAILSAFE, 10), ("link critical: dizzy", WEAK, 20),
 ]
 ANIM = [("armed: active", ARMED), ("disarmed: resting", READY), ("disarmed: arming blocked", BLOCKED),
