@@ -1,6 +1,6 @@
 """Frog face parts. Coordinates are frog pixels of the LEFT half (x 0..24, frog is 50 wide),
 mirrored to the right half automatically. The base frog is the resting frog minus pupils and mouth."""
-import gen7
+import frog
 
 W = 50
 def mirror(pts): return sorted(set(pts) | {(W - 1 - x, y) for x, y in pts})
@@ -47,7 +47,7 @@ MOUTHS = {
 }
 
 def base():
-    rows = [list(r) for r in gen7.build()]
+    rows = [list(r) for r in frog.build()]
     for x, y in mirror(PUPIL + SMILE): rows[y][x] = '.'
     return [''.join(r) for r in rows]
 

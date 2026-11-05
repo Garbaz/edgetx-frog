@@ -18,10 +18,10 @@ It is developed on a RadioMaster Pocket with EdgeTX 2.12.
 
 ## Development
 
-The frog art and the face parts are drawn in Python in `art/`. `sim/` renders the script in a reproduction of EdgeTX's B&W display and runs layout and loop checks.
+Needs [uv](https://docs.astral.sh/uv/). The frog art and the face parts are drawn in Python in `art/`. `sim/` renders the script in a reproduction of EdgeTX's B&W display and runs layout and loop checks.
 
 ```sh
-make                          # regenerate sprites in frog.lua, render previews (untracked) and readme.webp, run checks
+uv run build.py               # regenerate the sprites in frog.lua, render the previews and readme.webp, run the checks
 uv run sim/render.py --help   # one-off renders of single states and frames, animation info
 ```
 
