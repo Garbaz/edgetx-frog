@@ -27,8 +27,14 @@ EYES = {
     'closed': [(14, 4), (20, 4)] + [(x, 5) for x in range(15, 20)],             # asleep: curved lid
     'tired':  [(x, 3) for x in range(14, 21)] + [(x, 4) for x in range(15, 20)] + [(x, 5) for x in range(16, 19)],
 }
+# armed, looking around: both pupils shift the same way (not mirrored, or the frog goes cross-eyed)
+def gaze(dx): return sorted({(x + dx, y) for x, y in PUPIL} | {(W - 1 - x + dx, y) for x, y in PUPIL})
+GAZE = {'lookLeft': gaze(-1), 'lookRight': gaze(1)}
+
 MOUTHS = {
     'smile': SMILE,
+    'grin':  [(14, 11)] + [(x, 12) for x in range(15, 25)] + [(x, 13) for x in range(17, 25)]   # armed: open grin
+             + [(x, 14) for x in range(20, 25)],
     'neutral': [(x, 12) for x in range(18, 25)],                                # tired, between yawns
     'yawn1': [(23, 11), (24, 11), (22, 12), (23, 12), (24, 12), (23, 13), (24, 13)],   # yawn opening / closing
     'yawn2': ([(22, 10), (23, 10), (24, 10)] + [(x, 11) for x in range(21, 25)]        # big yawn, wide open

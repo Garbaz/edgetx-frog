@@ -56,6 +56,7 @@ if __name__ == '__main__':
              + '-- face parts drawn on top of the frog (both halves)\n'
              + 'local FACE = {\n  eyes = {\n'
              + ''.join(f'    {n} = {faces.lua_runs(faces.mirror(p))},\n' for n, p in faces.EYES.items())
+             + ''.join(f'    {n} = {faces.lua_runs(p)},\n' for n, p in faces.GAZE.items())
              + '    spiral = {\n' + ''.join(f'      {faces.lua_runs(faces.mirror(f))},\n' for f in faces.spiral_frames()) + '    },\n'
              + '  },\n  mouth = {\n'
              + ''.join(f'    {n} = {faces.lua_runs(faces.mirror(p))},\n' for n, p in faces.MOUTHS.items())

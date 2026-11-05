@@ -29,6 +29,8 @@ local FACE = {
     blink = { 14, 4, 7, 29, 4, 7 },
     closed = { 14, 4, 1, 20, 4, 1, 29, 4, 1, 35, 4, 1, 15, 5, 5, 30, 5, 5 },
     tired = { 14, 3, 7, 29, 3, 7, 15, 4, 5, 30, 4, 5, 16, 5, 3, 31, 5, 3 },
+    lookLeft = { 16, 3, 2, 30, 3, 2, 14, 4, 5, 29, 4, 5, 15, 5, 3, 30, 5, 3 },
+    lookRight = { 18, 3, 2, 32, 3, 2, 16, 4, 5, 31, 4, 5, 17, 5, 3, 32, 5, 3 },
     spiral = {
       { 15, 2, 5, 30, 2, 5, 19, 3, 1, 30, 3, 1, 15, 4, 3, 19, 4, 1, 30, 4, 1, 32, 4, 3, 15, 5, 1, 19, 5, 1, 30, 5, 1, 34, 5, 1, 15, 6, 5, 30, 6, 5 },
       { 15, 2, 3, 19, 2, 1, 30, 2, 1, 32, 2, 3, 15, 3, 1, 17, 3, 1, 19, 3, 1, 30, 3, 1, 32, 3, 1, 34, 3, 1, 15, 4, 1, 17, 4, 1, 19, 4, 1, 30, 4, 1, 32, 4, 1, 34, 4, 1, 15, 5, 1, 19, 5, 1, 30, 5, 1, 34, 5, 1, 15, 6, 5, 30, 6, 5 },
@@ -38,6 +40,7 @@ local FACE = {
   },
   mouth = {
     smile = { 14, 11, 1, 35, 11, 1, 15, 12, 5, 30, 12, 5, 20, 13, 10 },
+    grin = { 14, 11, 1, 35, 11, 1, 15, 12, 20, 17, 13, 16, 20, 14, 10 },
     neutral = { 18, 12, 14 },
     yawn1 = { 23, 11, 4, 22, 12, 6, 23, 13, 4 },
     yawn2 = { 22, 10, 6, 21, 11, 8, 20, 12, 10, 20, 13, 10, 21, 14, 8, 22, 15, 6 },
@@ -251,28 +254,36 @@ local FX, FY = 39, 1                -- frog position (50 x 32, centred on x = 63
 local function breath(t) return (t // BEAT) % 6 end
 
 -- the frog's mood, most urgent first:
---   dizzy  failsafe or link critical   spiral eyes spinning, wobbly mouth
---   tired  drone battery low           heavy eyelids, yawns every 4.8 s
---   awake  armed                       eyes open, blinks every few seconds
---   asleep disarmed / no link          eyes closed, breathing: wide mouth / open "o" (z's only with a link)
-local function drawFrog(mood, linked, t)
-  local eyes, mouth = FACE.eyes.open, FACE.mouth.smile
+--   dizzy   failsafe or link critical   spiral eyes spinning, wobbly mouth
+--   tired   drone battery low           heavy eyelids, yawns every 4.8 s
+--   active  armed                       open grin, glancing left and right, bouncing on the beat
+--   resting disarmed                    eyes open, smiling, blinks every 4.8 s
+--   asleep  no link                     eyes closed, breathing (wide mouth / open "o"), z's rising
+local function drawFrog(mood, t)
+  local beat = t // BEAT
+  local eyes, mouth, y = FACE.eyes.open, FACE.mouth.smile, FY
   if mood == "dizzy" then
     eyes, mouth = FACE.eyes.spiral[(t // (BEAT // 4)) % 4 + 1], FACE.mouth.wavy   -- one turn per beat
   elseif mood == "tired" then
-    local y = (t // BEAT) % 12                                              -- yawn in the last 4 of 12 beats
-    eyes = (y == 9 or y == 10 or y == 11) and FACE.eyes.closed or FACE.eyes.tired
-    mouth = (y == 9 or y == 10) and FACE.mouth.yawn2 or (y == 8 or y == 11) and FACE.mouth.yawn1 or FACE.mouth.neutral
+    local b = beat % 12                                                     -- yawn in the last 4 of 12 beats
+    eyes = (b == 9 or b == 10 or b == 11) and FACE.eyes.closed or FACE.eyes.tired
+    mouth = (b == 9 or b == 10) and FACE.mouth.yawn2 or (b == 8 or b == 11) and FACE.mouth.yawn1 or FACE.mouth.neutral
   elseif mood == "asleep" then
     eyes = FACE.eyes.closed
     mouth = (breath(t) < 3) and FACE.mouth.snore or FACE.mouth.wide            -- out: "o", in: wide
-  elseif (t % (12 * BEAT)) < 15 then
-    eyes = FACE.eyes.blink                                                    -- 150 ms blink every 4.8 s
+  elseif mood == "active" then
+    local b = beat % 12                                                     -- look around: centre, left, centre, right
+    eyes = (b == 4 or b == 5) and FACE.eyes.lookLeft or (b == 10 or b == 11) and FACE.eyes.lookRight or FACE.eyes.open
+    mouth = FACE.mouth.grin
+    y = FY + 1 - beat % 2                                                   -- bounce: 1 px up every other beat
   end
-  draw(FROG, FX, FY, FORCE)
-  draw(eyes, FX, FY, FORCE)
-  draw(mouth, FX, FY, FORCE)
-  if mood == "asleep" and linked then
+  if (mood == "resting" or mood == "active") and (t % (12 * BEAT)) < 15 then
+    eyes = FACE.eyes.blink                                                  -- 150 ms blink every 4.8 s
+  end
+  draw(FROG, FX, y, FORCE)
+  draw(eyes, FX, y, FORCE)
+  draw(mouth, FX, y, FORCE)
+  if mood == "asleep" then
     local b = breath(t)                       -- z's appear one by one while breathing out, fade while in
     if b <= 2 then draw(SPRITES.zSmall, FX + 41, FY + 10, FORCE) end
     if b >= 1 and b <= 3 then draw(SPRITES.zMid, FX + 45, FY + 5, FORCE) end
@@ -285,8 +296,9 @@ local function frogAndMode(linked, low, critical)
   local name, armed, blocked, failsafe = "NO LINK", false, false, false
   if type(fm) == "string" then name, armed, blocked, failsafe = parseMode(fm) end
 
-  local mood = (failsafe or critical) and "dizzy" or low and "tired" or armed and "awake" or "asleep"
-  drawFrog(mood, linked, getTime())
+  local mood = not linked and "asleep" or (failsafe or critical) and "dizzy" or low and "tired"
+               or armed and "active" or "resting"
+  drawFrog(mood, getTime())
   modeBox(name, armed and not (failsafe and not blinkOn()), blocked)
 end
 

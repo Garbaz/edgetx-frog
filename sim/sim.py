@@ -138,18 +138,18 @@ def sheet(imgs, cols=2, pad=10):
 ARMED, READY, BLOCKED = tel(99, 98, 7.9, 87, 3.9, 'AIR', 83), tel(99, 99, 8.2, 100, 4.3, 'AIR*'), tel(80, 85, 7.6, 64, 4.0, 'ANGL!')
 LOW, FAILSAFE, WEAK = tel(90, 92, 7.5, 18, 3.5, 'AIR', 312), tel(12, 30, 7.4, 41, 3.8, '!FS!', 401), tel(30, 64, 7.6, 58, 3.8, 'HOR', 200)
 NOLINK = tel(0, 0, 6.7)
-STATES = [  # name, telemetry, time in 10 ms ticks (one beat = 40 ticks)
-    ("armed, acro", ARMED, 100), ("armed, blinking", ARMED, 485),
-    ("asleep: breathing out, z", READY, 10), ("asleep: breathing out, z z", READY, 50),
-    ("asleep: breathing out, z z Z", READY, 90), ("asleep: breathing in, z Z", READY, 130),
-    ("asleep: breathing in, Z", READY, 170), ("asleep: breathing in", READY, 210),
-    ("disarmed, arming blocked", BLOCKED, 10), ("tired (low battery)", LOW, 10),
-    ("tired: yawn opening", LOW, 330), ("tired: big yawn", LOW, 370),
-    ("failsafe: dizzy (spin 1)", FAILSAFE, 10), ("failsafe: dizzy (spin 2)", FAILSAFE, 50),
-    ("link critical: dizzy", WEAK, 20), ("no link, radio battery low", NOLINK, 10),
+STATES = [  # name, telemetry, time in 10 ms ticks (one frog beat = 40 ticks)
+    ("armed: active", ARMED, 90), ("armed: bounce up, looking left", ARMED, 210),
+    ("armed: looking right", ARMED, 400), ("armed: blinking", ARMED, 485),
+    ("disarmed: resting", READY, 100), ("disarmed: arming blocked", BLOCKED, 100),
+    ("no link: breathing out, z", NOLINK, 10), ("no link: breathing out, z z", NOLINK, 50),
+    ("no link: breathing out, z z Z", NOLINK, 90), ("no link: breathing in, z Z", NOLINK, 130),
+    ("no link: breathing in, Z", NOLINK, 170), ("no link: breathing in", NOLINK, 210),
+    ("tired (low battery)", LOW, 10), ("tired: big yawn", LOW, 370),
+    ("failsafe: dizzy", FAILSAFE, 10), ("link critical: dizzy", WEAK, 20),
 ]
-ANIM = [("armed", ARMED), ("disarmed, ready", READY), ("disarmed, arming blocked", BLOCKED),
-        ("low drone battery", LOW), ("failsafe", FAILSAFE), ("link critical", WEAK), ("no link, radio battery low", NOLINK)]
+ANIM = [("armed: active", ARMED), ("disarmed: resting", READY), ("disarmed: arming blocked", BLOCKED),
+        ("low drone battery", LOW), ("failsafe", FAILSAFE), ("link critical", WEAK), ("no link: asleep, radio battery low", NOLINK)]
 LOOP = 1920       # ticks (10 ms): 19.2 s = frog loop (4.8 s) and EdgeTX blink (1.28 s) lining up
 STEP = 5          # 20 fps
 
