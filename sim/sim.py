@@ -199,6 +199,24 @@ STEP = 5          # 20 fps
 
 def at(tl, t): return tl(t) if callable(tl) else tl
 
+def readme_frame(panels, scale=3, cols=3, gap=1):
+    """One README frame: palette image, index 0 transparent (the gaps), 1 LCD background, 2 LCD ink."""
+    w, h = to_img(panels[0], scale).size
+    rows = math.ceil(len(panels) / cols)
+    out = Image.new('P', (cols * w + (cols - 1) * gap, rows * h + (rows - 1) * gap), 0)
+    out.putpalette([255, 255, 255, 178, 196, 170, 40, 44, 52])
+    out.info['transparency'] = 0
+    d = ImageDraw.Draw(out)
+    for i, px in enumerate(panels):
+        ox, oy = (i % cols) * (w + gap), (i // cols) * (h + gap)
+        d.rectangle([ox, oy, ox + w - 1, oy + h - 1], fill=1)            # like to_img: 1 LCD pixel of bezel
+        for y in range(H):
+            for x in range(W):
+                if px[y][x]:
+                    d.rectangle([ox + (x + 1) * scale, oy + (y + 1) * scale,
+                                 ox + (x + 2) * scale - 1, oy + (y + 2) * scale - 1], fill=2)
+    return out
+
 def flight_frames(script, times, profile=flight):
     """Run a scripted flight in one session (like the radio) and return the frames at the given ticks."""
     ses, want, out = Session(script), set(times), {}
@@ -234,8 +252,8 @@ if __name__ == '__main__':
     frames[0].save(out.replace('.png', '.webp'), save_all=True, append_images=frames[1:], duration=STEP * 10,
                    loop=0, lossless=True, method=4)
     print('saved', out, 'and', out.replace('.png', '.webp'), f'({len(frames)} frames)')
-    # README: six representative states, 3 x 2, as GIF (plays everywhere on GitHub; 4 colours)
-    frames = [sheet([labelled(to_img(px, scale=3), n) for px, (n, _) in zip(panels, README)], cols=3).quantize(colors=8)
-              for panels in loop_frames(script, panels=README)]
-    frames[0].save('readme.gif', save_all=True, append_images=frames[1:], duration=STEP * 10, loop=0, optimize=True)
-    print('saved readme.gif')
+    # README: six representative states, 3 x 2, separated by 1 transparent pixel, as lossless animated WebP
+    frames = [readme_frame(panels).convert('RGBA') for panels in loop_frames(script, panels=README)]
+    frames[0].save('readme.webp', save_all=True, append_images=frames[1:], duration=STEP * 10, loop=0,
+                   lossless=True, method=4)
+    print('saved readme.webp')

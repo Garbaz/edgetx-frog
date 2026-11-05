@@ -1,4 +1,4 @@
-PY = .venv/bin/python
+PY = uv run python
 LUA = SCRIPTS/TELEMETRY/frog.lua
 
 # regenerate the sprites in the script, render previews, run the layout checks
@@ -14,8 +14,5 @@ check:
 	$(PY) sim/check_layout.py $(LUA)
 	$(PY) sim/check_center.py $(LUA)
 	$(PY) sim/check_loop.py $(LUA)
-
-.venv:
-	python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 
 .PHONY: all sprites preview check
