@@ -168,13 +168,16 @@ ARMED, READY, BLOCKED = tel(99, 98, 7.9, 87, 3.9, 'AIR', 83), tel(99, 99, 8.2, 1
 LOW, FAILSAFE, WEAK = tel(90, 92, 7.5, 18, 3.5, 'AIR', 312), tel(12, 30, 7.4, 41, 3.8, '!FS!', 401), tel(30, 64, 7.6, 58, 3.8, 'HOR', 200)
 NOLINK = tel(0, 0, 6.7)
 LOW_READY = tel(90, 92, 7.5, 18, 3.5, 'AIR*')
+RADIO_LOW = tel(99, 99, 6.7, 100, 4.3, 'AIR*')
+BOTH_LOW = tel(90, 92, 6.7, 18, 3.5, 'AIR*')
 STATES = [  # name, telemetry, time in 10 ms ticks (one frog beat = 40 ticks)
     ("disarmed: resting", READY, 100), ("disarmed: arming blocked", BLOCKED, 100),
     ("no link: breathing out, z", NOLINK, 10), ("no link: breathing out, z z", NOLINK, 50),
     ("no link: breathing out, z z Z", NOLINK, 90), ("no link: breathing in, z Z", NOLINK, 130),
     ("no link: breathing in, Z", NOLINK, 170), ("no link: breathing in", NOLINK, 210),
     ("anxious (low battery)", LOW_READY, 30), ("anxious: glance at the battery", LOW_READY, 70),
-    ("anxious: sweat running down", LOW_READY, 100), ("anxious: shiver", LOW_READY, 185), ("armed, low battery", LOW, 100),
+    ("anxious: sweat running down", LOW_READY, 100),
+    ("radio battery low: glance left", RADIO_LOW, 70), ("both low: glance right", BOTH_LOW, 70), ("both low: then left", BOTH_LOW, 190), ("armed, low battery", LOW, 100),
     ("failsafe: dizzy", FAILSAFE, 10), ("link critical: dizzy", WEAK, 20),
 ]
 FLIGHT_STILLS = [  # name, time in ticks along the scripted flight (armed, one session)
@@ -183,18 +186,22 @@ FLIGHT_STILLS = [  # name, time in ticks along the scripted flight (armed, one s
     ("gulp", 800), ("85 % throttle: big fast hops, fly from the right", 1000), ("fast circling", 1300),
     ("disarm: tongue out", 1655), ("disarm: gulp", 1700), ("disarmed: resting", 1800),
 ]
+LOW_FLIGHT_STILLS = [  # the same flight with a low battery: anxious frog, the fly comes and goes on its own
+    ("low batt, armed, throttle 0: subtle bounce", 75), ("low batt: fly circling, frog ignores it", 250),
+    ("low batt, throttle 8 %: the fly leaves", 780), ("low batt, disarm: fly leaves, frog still", 1680),
+]
 ANIM = [("armed: scripted flight", flight), ("disarmed: resting", READY), ("disarmed: arming blocked", BLOCKED),
-        ("low battery: anxious", LOW_READY), ("low battery while flying", low_flight), ("failsafe", FAILSAFE), ("link critical", WEAK), ("no link: asleep, radio battery low", NOLINK)]
+        ("low battery: anxious", LOW_READY), ("radio battery low", RADIO_LOW), ("both batteries low", BOTH_LOW), ("low battery while flying", low_flight), ("failsafe", FAILSAFE), ("link critical", WEAK), ("no link: asleep, radio battery low", NOLINK)]
 LOOP = 1920       # ticks (10 ms): 19.2 s = frog loop (4.8 s), EdgeTX blink (1.28 s) and the scripted flight
 STEP = 5          # 20 fps
 
 def at(tl, t): return tl(t) if callable(tl) else tl
 
-def flight_frames(script, times):
-    """Run the scripted flight in one session (like the radio) and return the frames at the given ticks."""
+def flight_frames(script, times, profile=flight):
+    """Run a scripted flight in one session (like the radio) and return the frames at the given ticks."""
     ses, want, out = Session(script), set(times), {}
     for t in range(0, max(times) + 1, STEP):
-        px = ses.frame(flight(t), t)
+        px = ses.frame(profile(t), t)
         if t in want: out[t] = px
     return [out[t] for t in times]
 
@@ -213,6 +220,8 @@ if __name__ == '__main__':
     # still sheet: the armed flight steps, then the individual animation steps of the other states
     fl = flight_frames(script, [t for _, t in FLIGHT_STILLS])
     imgs = [labelled(to_img(px), n) for (n, _), px in zip(FLIGHT_STILLS, fl)]
+    lf = flight_frames(script, [t for _, t in LOW_FLIGHT_STILLS], low_flight)
+    imgs += [labelled(to_img(px), n) for (n, _), px in zip(LOW_FLIGHT_STILLS, lf)]
     imgs += [labelled(to_img(run(script, tl, True, t)), n) for n, tl, t in STATES]
     sheet(imgs).save(out.replace('.png', '_states.png')); print('saved', out.replace('.png', '_states.png'))
     to_img(fl[2], scale=8).save(out.replace('.png', '_big.png')); print('saved big')

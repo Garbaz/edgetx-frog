@@ -29,14 +29,13 @@ local FROG_MASK = { 14, 0, 22, 13, 1, 24, 12, 2, 26, 12, 3, 26, 12, 4, 26, 12, 5
 local FACE = {
   eyes = {
     open = { 17, 3, 2, 31, 3, 2, 15, 4, 5, 30, 4, 5, 16, 5, 3, 31, 5, 3 },
+    wide = { 16, 3, 3, 31, 3, 3, 16, 4, 3, 31, 4, 3, 16, 5, 3, 31, 5, 3 },
     blink = { 14, 4, 7, 29, 4, 7 },
     closed = { 14, 4, 1, 20, 4, 1, 29, 4, 1, 35, 4, 1, 15, 5, 5, 30, 5, 5 },
-    wide = { 16, 3, 3, 31, 3, 3, 16, 4, 3, 31, 4, 3, 16, 5, 3, 31, 5, 3 },
     lookLeft = { 16, 3, 2, 30, 3, 2, 14, 4, 5, 29, 4, 5, 15, 5, 3, 30, 5, 3 },
     lookRight = { 18, 3, 2, 32, 3, 2, 16, 4, 5, 31, 4, 5, 17, 5, 3, 32, 5, 3 },
-    wideLeft = { 15, 3, 3, 30, 3, 3, 15, 4, 3, 30, 4, 3, 15, 5, 3, 30, 5, 3 },
-    wideRight = { 17, 3, 3, 32, 3, 3, 17, 4, 3, 32, 4, 3, 17, 5, 3, 32, 5, 3 },
-    wideBattery = { 18, 4, 3, 33, 4, 3, 18, 5, 3, 33, 5, 3, 18, 6, 3, 33, 6, 3 },
+    atDrone = { 18, 4, 3, 33, 4, 3, 18, 5, 3, 33, 5, 3, 18, 6, 3, 33, 6, 3 },
+    atRadio = { 14, 4, 3, 29, 4, 3, 14, 5, 3, 29, 5, 3, 14, 6, 3, 29, 6, 3 },
     spiral = {
       { 15, 2, 5, 30, 2, 5, 19, 3, 1, 30, 3, 1, 15, 4, 3, 19, 4, 1, 30, 4, 1, 32, 4, 3, 15, 5, 1, 19, 5, 1, 30, 5, 1, 34, 5, 1, 15, 6, 5, 30, 6, 5 },
       { 15, 2, 3, 19, 2, 1, 30, 2, 1, 32, 2, 3, 15, 3, 1, 17, 3, 1, 19, 3, 1, 30, 3, 1, 32, 3, 1, 34, 3, 1, 15, 4, 1, 17, 4, 1, 19, 4, 1, 30, 4, 1, 32, 4, 1, 34, 4, 1, 15, 5, 1, 19, 5, 1, 30, 5, 1, 34, 5, 1, 15, 6, 5, 30, 6, 5 },
@@ -183,11 +182,13 @@ local function radioBattery()
   local s = getGeneralSettings()
   local v = getValue("tx-voltage")
   local pct = clamp((v - s.battMin) / (s.battMax - s.battMin), 0, 1)
-  if v < s.battWarn and not blinkOn() then return end   -- flashes when the radio battery is low
+  local low = v < s.battWarn
+  if low and not blinkOn() then return low end          -- flashes when the radio battery is low
   lcd.drawRectangle(2, 56, 13, 7, FORCE)
   lcd.drawFilledRectangle(15, 58, 2, 3, FORCE)
   local w = math.floor(9 * pct + 0.5)
   if w > 0 then lcd.drawFilledRectangle(4, 58, w, 3, FORCE) end
+  return low
 end
 
 -- clock and flight timer, mirrored around the screen axis x = 63.5, symbols on the outside
@@ -265,22 +266,23 @@ local FX, FY = 39, 1                -- frog position (50 x 32, centred on x = 63
 -- sleeping breath: 6 beats = 2.4 s; beats 0..2 breathing out, 3..5 breathing in
 local function breath(t) return (t // BEAT) % 6 end
 
--- Armed frog, driven by the flight:
--- * throttle sets the excitement: calm at zero, hopping faster (1.25..5 per second) as the throttle
---   rises, 2 px high above half throttle
--- * while the throttle is up a fly circles the frog (behind it on the back half of the orbit), the
---   faster the more the drone tilts (tilt ~ speed); the frog follows it with its eyes
--- * the moment the throttle drops below 10 % (or the drone disarms) the frog catches the fly with its
---   tongue and gulps it down, before going back to resting when disarmed; raising the throttle above
---   15 % again brings a new fly in from the side, alternating left and right (the gap between the two
---   thresholds keeps a stick hovering around one of them from flickering)
+-- The flight, as the frog sees it. Two independent parts:
+-- * the fly is driven by the drone alone, whatever the frog feels: it flies in from the side once the
+--   armed drone's throttle goes above 15 % (alternating left and right) and circles the frog (behind it
+--   on the back half of the orbit), the faster the more the drone tilts (tilt ~ speed). When the
+--   throttle drops below 10 % or the drone disarms, an excited frog catches it with its tongue and gulps
+--   it down; any other frog lets it fly away. (The gap between 10 and 15 % keeps a stick resting near
+--   one of them from flickering.)
+-- * the frog's hop: excited, it hops faster with the throttle (1.25..5 per second), 2 px high above half
+--   throttle, still below 10 %; anxious and armed, it keeps bouncing 1 px, also at zero throttle.
 local ORBIT_X, ORBIT_Y, ORBIT_RX, ORBIT_RY = 63.5, 15, 32, 14
 local TONGUE_OUT, TONGUE_BACK, GULP = 12, 18, 60        -- ticks (10 ms)
-local ENTER = 50                                       -- ticks for a new fly to fly in from the side
-local THR_LOW, THR_HIGH = 0.10, 0.15                   -- throttle: catch below, new fly above
-local hop = { phase = 0 }
-local fly = { state = "gone", side = 1 }               -- gone / entering / circling / caught
-local flying = false
+local ENTER = 50                                       -- ticks for the fly to come in from / leave to the side
+local THR_LOW, THR_HIGH = 0.10, 0.15                   -- throttle: fly stops below, comes above
+local SIDE_X = { [-1] = 19, [1] = 104 }                -- where the fly appears / disappears
+local hop = { phase = 0, height = 0 }
+local fly = { state = "gone", side = 1 }               -- gone / entering / circling / leaving / caught
+local flying = false                                   -- armed and throttle up (with the 10/15 % hysteresis)
 local lastT
 
 local function throttle()                               -- 0..1 from the throttle stick
@@ -291,25 +293,20 @@ local function orbitPos(a)                              -- top-left of the 5x3 f
   return math.floor(ORBIT_X + ORBIT_RX * math.cos(a) - 2 + 0.5), math.floor(ORBIT_Y + ORBIT_RY * math.sin(a) - 1 + 0.5)
 end
 
-local function updateFlight(t, armed)
-  local dt = lastT and clamp(t - lastT, 0, 20) / 100 or 0  -- seconds; capped when the screen was away
-  lastT = t
-  local thr = throttle()
-  if not armed then flying = false
-  elseif flying then flying = thr >= THR_LOW
-  else flying = thr > THR_HIGH end
-  if flying then hop.phase = hop.phase + (1.25 + 3.75 * thr) * dt else hop.phase = 0 end
-  hop.height = flying and ((thr > 0.5) and 2 or 1) or 0
+local function flyAround(fly) return fly.state == "entering" or fly.state == "circling" or fly.state == "leaving" end
+local function gulped() return fly.state == "caught" and fly.timer >= TONGUE_OUT + TONGUE_BACK end
 
-  if fly.state == "caught" then
-    fly.timer = fly.timer + dt * 100
-    if fly.timer >= TONGUE_OUT + TONGUE_BACK + GULP then fly.state = "gone" end
-  end
+local function updateFly(dt, hunter)
+  if fly.state == "caught" or fly.state == "leaving" or fly.state == "entering" then fly.timer = fly.timer + dt * 100 end
+  if fly.state == "caught" and fly.timer >= TONGUE_OUT + TONGUE_BACK + GULP then fly.state = "gone" end
+  if fly.state == "leaving" and fly.timer >= ENTER then fly.state = "gone" end
   if fly.state == "gone" and flying then
     fly.side = -fly.side
     fly.state, fly.timer, fly.angle = "entering", 0, (fly.side < 0) and math.pi or 0
   elseif (fly.state == "entering" or fly.state == "circling") and not flying then
-    fly.state, fly.timer = "caught", 0                  -- throttle cut or disarm: snap!
+    if hunter then fly.state = "caught"                -- throttle cut or disarm: snap!
+    else fly.state, fly.from, fly.to = "leaving", fly.x, (fly.x < ORBIT_X) and SIDE_X[-1] or SIDE_X[1] end
+    fly.timer, fly.behind = 0, false
   end
   if fly.state == "entering" or fly.state == "circling" then
     local tilt = math.sqrt(getValue("Ptch") ^ 2 + getValue("Roll") ^ 2)       -- radians
@@ -317,16 +314,24 @@ local function updateFlight(t, armed)
     if fly.state == "circling" then fly.angle = fly.angle + 2 * math.pi * revs * dt * ((fly.side < 0) and 1 or -1) end
     local ox, oy = orbitPos(fly.angle)
     if fly.state == "entering" then
-      fly.timer = fly.timer + dt * 100
       local f = clamp(fly.timer / ENTER, 0, 1)
-      local sx = (fly.side < 0) and 19 or 104
-      fly.x, fly.y = math.floor(sx + f * (ox - sx) + 0.5), oy
+      fly.x, fly.y = math.floor(SIDE_X[fly.side] + f * (ox - SIDE_X[fly.side]) + 0.5), oy
       if f >= 1 then fly.state = "circling" end
     else
       fly.x, fly.y = ox, oy
     end
     fly.behind = fly.state == "circling" and math.sin(fly.angle) < 0
+  elseif fly.state == "leaving" then
+    fly.x = math.floor(fly.from + clamp(fly.timer / ENTER, 0, 1) * (fly.to - fly.from) + 0.5)
   end
+end
+
+local function updateHop(dt, mood, armed, thr)
+  local rate, height = 0, 0
+  if mood == "excited" and flying then rate, height = 1.25 + 3.75 * thr, (thr > 0.5) and 2 or 1
+  elseif mood == "anxious" and armed then rate, height = 1.25 + 3.75 * thr, 1 end
+  hop.phase = (height > 0) and hop.phase + rate * dt or 0
+  hop.height = height
 end
 
 local function tongue(x1, y1, y)                        -- 2 px wide, from the mouth
@@ -343,36 +348,36 @@ local function drawFly(t, x, y)
 end
 
 -- the frog's mood, most urgent first:
---   dizzy   failsafe or link critical   spiral eyes spinning, wobbly mouth
---   active  armed                       open grin, hops with the throttle, hunts the circling fly
---   anxious drone battery low           wide eyes glancing at the battery, clenched teeth, sweat drop;
---                                       while armed on top of the active frog (still hunting the fly)
---   resting disarmed                    eyes open, smiling, blinks every 4.8 s
 --   asleep  no link                     eyes closed, breathing (wide mouth / open "o"), z's rising
-local function drawFrog(mood, t, low)
+--   dizzy   failsafe or link critical   spiral eyes spinning, wobbly mouth
+--   anxious drone or radio battery low  wide eyes glancing at the low battery (right: drone, left: radio;
+--                                       alternating when both), clenched teeth, sweat drop;
+--                                       bounces subtly while armed, ignores the fly
+--   excited armed (or finishing a catch) open grin, hops with the throttle, eyes on the fly, catches it
+--   resting disarmed                    eyes open, smiling
+-- resting, excited and anxious blink every 4.8 s
+local function drawFrog(mood, t, droneLow, radioLow)
   local beat = t // BEAT
-  local eyes, mouth, y, dx = FACE.eyes.open, FACE.mouth.smile, FY, 0
-  local anxious = low and (mood == "active" or mood == "resting")
-  local glance = anxious and (t % 120) >= 60 and (t % 120) < 90   -- 0.3 s look at the battery every 1.2 s
+  local eyes, mouth = FACE.eyes.open, FACE.mouth.smile
+  local y = FY + ((mood == "excited" or mood == "anxious") and hop.height > 0 and 2 or 0)   -- crouched to hop
+          - ((hop.phase % 1 < 0.5) and hop.height or 0)
+  local catch                                                               -- tongue tip while catching
   if mood == "dizzy" then
     eyes, mouth = FACE.eyes.spiral[(t // (BEAT // 4)) % 4 + 1], FACE.mouth.wavy   -- one turn per beat
   elseif mood == "asleep" then
     eyes = FACE.eyes.closed
     mouth = (breath(t) < 3) and FACE.mouth.snore or FACE.mouth.wide            -- out: "o", in: wide
-  elseif anxious then
-    eyes, mouth = glance and FACE.eyes.wideBattery or FACE.eyes.wide, FACE.mouth.grimace
-    local p = t % 240
-    if mood == "resting" and p >= 180 and p < 200 then dx = ((t // 5) % 2 == 0) and 1 or -1 end  -- a shiver
-  end
-  local catch                                                               -- tongue tip while catching
-  if mood == "active" then
+  elseif mood == "anxious" then
+    local glance = (t % 120) >= 60 and (t % 120) < 90                       -- 0.3 s at the battery every 1.2 s:
+    local right = droneLow and not (radioLow and (t // 120) % 2 == 1)      -- both low: right, left, right, ...
+    eyes = glance and (right and FACE.eyes.atDrone or FACE.eyes.atRadio) or FACE.eyes.wide
+    mouth = FACE.mouth.grimace
+  elseif mood == "excited" then
     local L, R, C = FACE.eyes.lookLeft, FACE.eyes.lookRight, FACE.eyes.open
-    if anxious then L, R, C = FACE.eyes.wideLeft, FACE.eyes.wideRight, FACE.eyes.wide end
-    mouth = anxious and FACE.mouth.grimace or FACE.mouth.grin
-    y = FY + 2 - ((hop.phase % 1 < 0.5) and hop.height or 0)               -- crouched, hopping with the throttle
+    mouth = FACE.mouth.grin
     local b = beat % 12                                                     -- no fly: look around
     eyes = (b == 4 or b == 5) and L or (b == 10 or b == 11) and R or C
-    if fly.state == "entering" or fly.state == "circling" then              -- eyes on the fly
+    if flyAround(fly) then                                                  -- eyes on the fly
       eyes = (fly.x + 2 < 57) and L or (fly.x + 2 > 70) and R or C
     elseif fly.state == "caught" then
       eyes = (fly.x + 2 < 63) and L or R
@@ -386,21 +391,18 @@ local function drawFrog(mood, t, low)
         eyes, mouth = FACE.eyes.closed, FACE.mouth.smile                     -- gulp, eyes shut with delight
       end
     end
-    if glance and fly.state ~= "caught" then eyes = FACE.eyes.wideBattery end
   end
-  if (mood == "resting" or mood == "active") and not (fly.state == "caught" and fly.timer >= TONGUE_OUT + TONGUE_BACK)
-     and (t % (12 * BEAT)) < 15 then
+  if (mood == "resting" or mood == "excited" or mood == "anxious") and not gulped() and (t % (12 * BEAT)) < 15 then
     eyes = FACE.eyes.blink                                                  -- 150 ms blink every 4.8 s
   end
-  local showFly = mood == "active" and (fly.state == "entering" or fly.state == "circling"
-                                        or (fly.state == "caught" and fly.timer < TONGUE_OUT))
+  local showFly = flyAround(fly) or (mood == "excited" and fly.state == "caught" and fly.timer < TONGUE_OUT)
   if showFly and fly.behind then drawFly(t, fly.x, fly.y) end               -- behind: the frog covers it
-  draw(FROG_MASK, FX + dx, y, ERASE)
-  draw(FROG, FX + dx, y, FORCE)
-  draw(eyes, FX + dx, y, FORCE)
-  draw(mouth, FX + dx, y, FORCE)
-  if anxious and not (fly.state == "caught" and fly.timer >= TONGUE_OUT + TONGUE_BACK) and t % 240 < 120 then
-    draw(SPRITES.sweat, FX + dx + 39, y + 2 + (t % 240) // 15, FORCE)       -- sweat drop running down the cheek
+  draw(FROG_MASK, FX, y, ERASE)
+  draw(FROG, FX, y, FORCE)
+  draw(eyes, FX, y, FORCE)
+  draw(mouth, FX, y, FORCE)
+  if mood == "anxious" and t % 240 < 120 then                              -- sweat drop running straight down
+    draw(SPRITES.sweat, FX + 37, y + 1 + (t % 240) // 20, FORCE)            -- the side of the head, touching it
   end
   if showFly and not fly.behind then drawFly(t, fly.x, fly.y) end
   if catch then
@@ -415,18 +417,28 @@ local function drawFrog(mood, t, low)
   end
 end
 
-local function frogAndMode(linked, low, critical)
+local function frogAndMode(linked, droneLow, radioLow, critical)
   local fm = linked and getValue("FM") or 0
   local name, armed, blocked, failsafe = "NO LINK", false, false, false
   if type(fm) == "string" then name, armed, blocked, failsafe = parseMode(fm) end
 
   local t = getTime()
-  if armed or fly.state ~= "gone" then updateFlight(t, armed) else lastT = nil end
-  if not linked then fly.state, flying, lastT = "gone", false, nil end
-  local catching = fly.state == "caught"               -- also finishes the catch after a disarm
   local mood = not linked and "asleep" or (failsafe or critical) and "dizzy"
-               or (armed or catching) and "active" or "resting"
-  drawFrog(mood, t, low)
+               or (droneLow or radioLow) and "anxious"
+               or (armed or fly.state == "caught") and "excited" or "resting"
+  if linked then
+    local dt = lastT and clamp(t - lastT, 0, 20) / 100 or 0  -- seconds; capped when the screen was away
+    local thr = throttle()
+    lastT = t
+    if not armed then flying = false
+    elseif flying then flying = thr >= THR_LOW
+    else flying = thr > THR_HIGH end
+    updateFly(dt, mood == "excited")
+    updateHop(dt, mood, armed, thr)
+  else
+    fly.state, flying, lastT, hop.phase, hop.height = "gone", false, nil, 0, 0
+  end
+  drawFrog(mood, t, droneLow, radioLow)
   modeBox(name, armed and not (failsafe and not blinkOn()), blocked)
 end
 
@@ -462,8 +474,8 @@ local function run(event)
   end
   droneBattery(pct, low)
   percent(pct, low)
-  frogAndMode(linked, low, linked and rq < rqCrit)
-  radioBattery()
+  local radioLow = radioBattery()
+  frogAndMode(linked, low, radioLow, linked and rq < rqCrit)
   times()
   return 0
 end

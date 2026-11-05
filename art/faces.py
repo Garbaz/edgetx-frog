@@ -25,15 +25,14 @@ def spiral_frames():
 
 EYES = {
     'open':   PUPIL,                                                            # resting / armed
+    'wide':   SMALL_PUPIL,                                                      # anxious: wide-eyed, small pupils
     'blink':  [(x, 4) for x in range(14, 21)],                                  # mid-blink: straight lid
     'closed': [(14, 4), (20, 4)] + [(x, 5) for x in range(15, 20)],             # asleep: curved lid
-    'wide':   SMALL_PUPIL,                                                      # anxious: wide-eyed, small pupils
 }
 # armed, looking around: both pupils shift the same way (not mirrored, or the frog goes cross-eyed)
 def gaze(dx, dy=0, p=PUPIL): return sorted({(x + dx, y + dy) for x, y in p} | {(W - 1 - x + dx, y + dy) for x, y in p})
 GAZE = {'lookLeft': gaze(-1), 'lookRight': gaze(1),
-        'wideLeft': gaze(-1, 0, SMALL_PUPIL), 'wideRight': gaze(1, 0, SMALL_PUPIL),
-        'wideBattery': gaze(2, 1, SMALL_PUPIL)}                                 # anxious: a glance at the drone battery
+        'atDrone': gaze(2, 1, SMALL_PUPIL), 'atRadio': gaze(-2, 1, SMALL_PUPIL)}  # anxious: glances at a low battery
 
 MOUTHS = {
     'smile': SMILE,
