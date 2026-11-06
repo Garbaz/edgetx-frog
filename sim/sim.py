@@ -68,6 +68,7 @@ class LCD:
         else: s.last_left, s.last_right = orig, right
 
 VIBRATED = set()
+VTX_LABELS, VTX_VALUES = ['25', '100', '200', '400', 'PIT'], [1, 2, 3, 4, 0]   # the drone's vtxtable
 
 class Session:
     """One Lua state across frames, like the radio: the script keeps its state between run() calls."""
@@ -108,7 +109,27 @@ class Session:
         g.getDateTime = lambda: self.L.table_from({'hour': 15, 'min': 42})
         g.getTime = lambda: self.t
         g.playHaptic = lambda *a: self.buzz.append(a)
+        self.crsf = []
+        g.crossfireTelemetryPush = lambda cmd, data: self.msp(cmd, list(data.values()))
+        g.crossfireTelemetryPop = lambda: self.crsf.pop(0) if self.crsf else None
         self.mod = self.L.execute(open(script).read())
+    def msp(self, cmd, d):
+        """Betaflight answering MSP over CRSF (when linked): VTX device status and vtxtable power levels."""
+        if cmd != 0x7A or not self.tel.get('rq'): return True
+        status, mcmd = d[2], d[4] | d[5] << 8
+        if mcmd == 0x3004:      # SmartAudio, ready, band/channel B1, power index, 5733 MHz, status, 8 placeholder levels
+            body = bytes([3, 1, 1, 2, 1, 1, self.tel.get('vtx', 5), 1, 0x65, 0x16, 1, 0, 0, 0, 0, 8]) + bytes([1, 0, 1, 0]) * 8 \
+                   + bytes([5, 2, 0, 0, 0, 0])
+        elif mcmd == 138:       # index, value, label length, label
+            i = d[8]; body = bytes([i, VTX_VALUES[i - 1], 0, 3]) + VTX_LABELS[i - 1].ljust(3).encode()
+        else: return True
+        out = bytes([0x10 | (status & 0x0F) | 0x40, 0]) + mcmd.to_bytes(2, 'little') + len(body).to_bytes(2, 'little') + body
+        seq = status & 0x0F
+        for i in range(0, len(out), 58):             # chunks of up to 58 bytes, the later ones with a status byte
+            chunk = out[i:i + 58] if i == 0 else bytes([0x40 | seq]) + out[i:i + 57]
+            self.crsf.append((0x7B, self.L.table_from([0xEA, 0xC8, *chunk])))
+            seq = (seq + 1) & 0x0F
+        return True
     def frame(self, tel, t, blink_on=None):
         self.tel, self.t, self.buzz = tel, t, []
         self.lcd = LCD(bool(t & 64) if blink_on is None else blink_on)   # EdgeTX: BLINK_ON_PHASE = bit 6
@@ -118,7 +139,9 @@ class Session:
         return self.lcd.px
 
 def run(script, tel, blink_on, t=None):
-    return Session(script).frame(tel, 10 if t is None else t, None if t is not None else blink_on)
+    ses, t0 = Session(script), 10 if t is None else t
+    for w in (t0 - 40, t0 - 20): ses.frame(tel, w)   # earlier frames: the VTX status and its label asked over MSP
+    return ses.frame(tel, t0, None if t is not None else blink_on)
 
 def to_img(px, scale=4):
     on, off = (40, 44, 52), (178, 196, 170)
@@ -132,7 +155,7 @@ def to_img(px, scale=4):
 
 def tel(rq, tq, tx, bat=None, v=None, fm=None, t=0):
     d = dict(rq=rq, tx=tx, t=t)
-    if rq: d.update({'TQly': tq, 'Bat%': bat, 'RxBt': v, 'FM': fm})
+    if rq: d.update({'TQly': tq, 'Bat%': bat, 'RxBt': v, 'FM': fm, 'vtx': 5})   # VTX in pit mode (SC middle)
     return d
 
 def labelled(im, name):
@@ -158,7 +181,7 @@ def flight(t):
     elif 9.6 <= s < 17.0: thr, tilt = 0.85, 0.9
     armed = 0.5 <= s < 16.5
     d = tel(99, 98, 7.9, 87, 3.9, 'AIR' if armed else 'AIR*', 83)
-    d.update({'thr': -1024 + 2048 * thr, 'Ptch': tilt, 'Roll': 0.0})
+    d.update({'thr': -1024 + 2048 * thr, 'Ptch': tilt, 'Roll': 0.0, 'vtx': 1})      # SC up: VTX 25 mW
     return d
 
 def low_flight(t):
@@ -166,20 +189,25 @@ def low_flight(t):
 
 ARMED, READY, BLOCKED = tel(99, 98, 7.9, 87, 3.9, 'AIR', 83), tel(99, 99, 8.2, 100, 4.3, 'AIR*'), tel(80, 85, 7.6, 64, 4.0, 'ANGL!')
 LOW, FAILSAFE, WEAK = tel(90, 92, 7.5, 18, 3.5, 'AIR', 312), tel(12, 30, 7.4, 41, 3.8, '!FS!', 401), tel(30, 64, 7.6, 58, 3.8, 'HOR', 200)
+LINK_WEAK = tel(44, 70, 7.9, 87, 3.9, 'AIR*')        # RQly 44: below the warning (45), above critical (42)
+ALL_FLASH = tel(44, 70, 6.7, 18, 3.5, 'AIR*')        # weak link, both batteries low
 NOLINK = tel(0, 0, 6.7)
 LOW_READY = tel(90, 92, 7.5, 18, 3.5, 'AIR*')
 RADIO_LOW = tel(99, 99, 6.7, 100, 4.3, 'AIR*')
 BOTH_LOW = tel(90, 92, 6.7, 18, 3.5, 'AIR*')
 NO_BATT = tel(99, 99, 8.2, 100, 0.0, 'AIR!')   # drone on USB, no battery: Betaflight sends 0 V
+VTX_HIGH = dict(READY, vtx=3)                  # SC down: VTX 200 mW (the other states: SC middle, pit mode)
 STATES = [  # name, telemetry, time in 10 ms ticks (one frog beat = 40 ticks)
-    ("disarmed: resting", READY, 100), ("disarmed: arming blocked", BLOCKED, 100),
+    ("disarmed: resting", READY, 100), ("arming blocked: dizzy", BLOCKED, 100),
     ("no link: breathing out, z", NOLINK, 10), ("no link: breathing out, z z", NOLINK, 50),
     ("no link: breathing out, z z Z", NOLINK, 90), ("no link: breathing in, z Z", NOLINK, 130),
     ("no link: breathing in, Z", NOLINK, 170), ("no link: breathing in", NOLINK, 210),
     ("anxious (low battery)", LOW_READY, 30), ("anxious: glance at the battery", LOW_READY, 70),
     ("anxious: sweat running down", LOW_READY, 100),
     ("radio battery low: glance left", RADIO_LOW, 70), ("both low: glance right", BOTH_LOW, 30), ("both low: pilot, briefly", BOTH_LOW, 65), ("both low: glance left", BOTH_LOW, 90), ("armed, low battery", LOW, 100),
-    ("drone on USB, no battery", NO_BATT, 100), ("failsafe: dizzy", FAILSAFE, 10), ("link critical: dizzy", WEAK, 20),
+    ("drone on USB, no battery", NO_BATT, 100), ("SC down: VTX 200 mW", VTX_HIGH, 100), ("failsafe: dizzy", FAILSAFE, 10), ("link critical: dizzy", WEAK, 20),
+    ("link weak: glance at the meter", LINK_WEAK, 70), ("all flashing: glance right", ALL_FLASH, 40),
+    ("all flashing: glance left", ALL_FLASH, 90),
 ]
 FLIGHT_STILLS = [  # name, time in ticks along the scripted flight (armed, one session)
     ("armed, throttle 0: calm", 75), ("throttle up: a fly comes in", 115), ("fly circling (in front)", 250),
@@ -191,11 +219,13 @@ LOW_FLIGHT_STILLS = [  # the same flight with a low battery: anxious frog, the f
     ("low batt, armed, throttle 0: subtle bounce", 75), ("low batt: fly circling, frog ignores it", 250),
     ("low batt, throttle 8 %: the fly leaves", 780), ("low batt, disarm: fly leaves, frog still", 1680),
 ]
-ANIM = [("armed: scripted flight", flight), ("disarmed: resting", READY), ("disarmed: arming blocked", BLOCKED),
-        ("low battery: anxious", LOW_READY), ("radio battery low", RADIO_LOW), ("both batteries low", BOTH_LOW), ("low battery while flying", low_flight), ("failsafe", FAILSAFE), ("link critical", WEAK), ("no link: asleep, radio battery low", NOLINK)]
+ANIM = [("armed: scripted flight", flight), ("disarmed: resting", READY), ("arming blocked: dizzy", BLOCKED),
+        ("low battery: anxious", LOW_READY), ("radio battery low", RADIO_LOW), ("both batteries low", BOTH_LOW), ("low battery while flying", low_flight), ("failsafe", FAILSAFE), ("link critical", WEAK), ("link weak", LINK_WEAK),
+        ("weak link, both batteries low", ALL_FLASH), ("no link: asleep, radio battery low", NOLINK)]
 README = [("armed: hunting the fly", flight), ("disarmed: resting", READY), ("arming blocked", BLOCKED),
           ("low battery: anxious", low_flight), ("failsafe: dizzy", FAILSAFE), ("no link: asleep", NOLINK)]
-LOOP = 1920       # ticks (10 ms): 19.2 s = frog loop (4.8 s), EdgeTX blink (1.28 s) and the scripted flight
+LOOP = 1920       # ticks (10 ms): preview length, 19.2 s = 4 frog loops and the scripted flight; the warning
+                  # blink and the link pulse run on their own periods, so they jump where the preview loops
 STEP = 5          # 20 fps
 
 def at(tl, t): return tl(t) if callable(tl) else tl

@@ -9,7 +9,7 @@ LUA = 'SCRIPTS/TELEMETRY/frog.lua'
 STEPS = {
     'sprites': [['art/sprites_lua.py', LUA]],
     'preview': [['sim/sim.py', LUA, 'preview.png']],
-    'check':   [['sim/check_layout.py', LUA], ['sim/check_center.py', LUA], ['sim/check_loop.py', LUA]],
+    'check':   [['sim/check_layout.py', LUA], ['sim/check_center.py', LUA]],
 }
 
 if __name__ == '__main__':

@@ -1,8 +1,24 @@
 """Generate the sprite block of frog.lua (between SPRITES BEGIN / END) from the pixel art in this directory."""
 import os, re, sys
-import faces
+import faces, gauges
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'sim'))
 from fonts import FONTS
+
+def gauges_block():
+    seg = gauges.segments()
+    side = lambda kind, i: '{ ' + ', '.join(faces.lua_runs(p) for p in seg[kind][i]) + ' }'
+    return ('-- link meter: runs relative to its top-left, per side (1 left: TQly, 2 right: RQly) and segment (1 = bottom);\n'
+            '-- lit segments filled with 1 px rounded outer corners, unlit ones as their outline\n'
+            f'local LQ_X, LQ_Y, LQ_H, LQ_SEGS = {gauges.LQ_X}, {gauges.LQ_Y}, {gauges.LQ_H}, {gauges.LQ_SEGS}\n'
+            'local LQ = {\n'
+            + ''.join(f'  {kind} = {{\n    {side(kind, 0)},\n    {side(kind, 1)},\n  }},\n' for kind in ('lit', 'unlit'))
+            + '}\n'
+            '-- rows of the liveness pulse, bottom to top (the segments\' inner rows)\n'
+            'local LQ_PULSE = { ' + ', '.join(map(str, gauges.pulse_rows())) + ' }\n\n'
+            '-- radio battery symbol, and the charge bar inside it: x, y (relative to the symbol), max width, height\n'
+            f'local RADIO_X, RADIO_Y = {gauges.RADIO_X}, {gauges.RADIO_Y}\n'
+            f'local RADIO_BATT = {faces.lua_runs(gauges.radio_battery())}\n'
+            'local RADIO_FILL = { ' + ', '.join(map(str, gauges.RADIO_FILL)) + ' }\n')
 
 def block():
     chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!-* '
@@ -23,7 +39,8 @@ def block():
             + '    spiral = {\n' + ''.join(f'      {faces.lua_runs(faces.mirror(f))},\n' for f in faces.spiral_frames()) + '    },\n'
             '  },\n  mouth = {\n'
             + ''.join(f'    {n} = {faces.lua_runs(faces.mirror(p))},\n' for n, p in faces.MOUTHS.items())
-            + '  },\n}\n'
+            + '  },\n}\n\n'
+            + gauges_block() +
             '-- SPRITES END')
 
 if __name__ == '__main__':

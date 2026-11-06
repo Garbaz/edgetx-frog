@@ -32,7 +32,7 @@ EYES = {
 # armed, looking around: both pupils shift the same way (not mirrored, or the frog goes cross-eyed)
 def gaze(dx, dy=0, p=PUPIL): return sorted({(x + dx, y + dy) for x, y in p} | {(W - 1 - x + dx, y + dy) for x, y in p})
 GAZE = {'lookLeft': gaze(-1), 'lookRight': gaze(1),
-        'atDrone': gaze(2, 1, SMALL_PUPIL), 'atRadio': gaze(-2, 1, SMALL_PUPIL)}  # anxious: glances at a low battery
+        'glanceRight': gaze(2, 1, SMALL_PUPIL), 'glanceLeft': gaze(-2, 1, SMALL_PUPIL)}   # anxious: at what flashes
 
 MOUTHS = {
     'smile': SMILE,

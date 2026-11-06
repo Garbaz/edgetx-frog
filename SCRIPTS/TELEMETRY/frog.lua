@@ -1,12 +1,19 @@
 -- FROG A75C telemetry screen for the RadioMaster Pocket (EdgeTX, 128x64 B&W)
 --
---  left:   link quality wedge (left half: TQly = what the radio receives,
---                              right half: RQly = what the drone receives)
+--  left:   VTX power (top), link quality wedge below it (left half: TQly = what the radio receives,
+--                                                right half: RQly = what the drone receives)
 --  center: frog, flight mode in a box below (filled while armed)
 --  right:  drone battery (BETAFPV LAVA style) + Betaflight Bat%
 --  bottom: radio battery (under the link meter), clock and flight timer (Timer 1) mirrored in the middle
 
 local DRONE_LOW_V = 3.6   -- same threshold as the L01 vibration alarm (RxBt < 3.6 V)
+
+-- VTX power, asked from Betaflight over the link: its CRSF telemetry has no VTX sensor, but it answers MSP over CRSF
+-- (which ELRS forwards, as for the Betaflight TX Lua scripts). MSP2_GET_VTX_DEVICE_STATUS has the power index the
+-- VTX last reported over SmartAudio, MSP_VTXTABLE_POWERLEVEL the vtxtable label for an index ("25", "200", "PIT").
+-- Asked only while this screen is shown; "--" until a reply comes and when none has for VTX_STALE.
+local MSP_DEVICE_STATUS, MSP_POWERLEVEL = 0x3004, 138
+local VTX_POLL, VTX_LABEL_RETRY, VTX_STALE = 200, 20, 500   -- ticks (10 ms)
 
 local MODES = { AIR = "ACRO", ACRO = "ACRO", ANGL = "ANGLE", HOR = "HORIZ",
                 CHIR = "CHIRP", PASS = "PASS", ALTH = "ALTH", POSH = "POSH",
@@ -34,8 +41,8 @@ local FACE = {
     closed = { 14, 4, 1, 20, 4, 1, 29, 4, 1, 35, 4, 1, 15, 5, 5, 30, 5, 5 },
     lookLeft = { 16, 3, 2, 30, 3, 2, 14, 4, 5, 29, 4, 5, 15, 5, 3, 30, 5, 3 },
     lookRight = { 18, 3, 2, 32, 3, 2, 16, 4, 5, 31, 4, 5, 17, 5, 3, 32, 5, 3 },
-    atDrone = { 18, 4, 3, 33, 4, 3, 18, 5, 3, 33, 5, 3, 18, 6, 3, 33, 6, 3 },
-    atRadio = { 14, 4, 3, 29, 4, 3, 14, 5, 3, 29, 5, 3, 14, 6, 3, 29, 6, 3 },
+    glanceRight = { 18, 4, 3, 33, 4, 3, 18, 5, 3, 33, 5, 3, 18, 6, 3, 33, 6, 3 },
+    glanceLeft = { 14, 4, 3, 29, 4, 3, 14, 5, 3, 29, 5, 3, 14, 6, 3, 29, 6, 3 },
     spiral = {
       { 15, 2, 5, 30, 2, 5, 19, 3, 1, 30, 3, 1, 15, 4, 3, 19, 4, 1, 30, 4, 1, 32, 4, 3, 15, 5, 1, 19, 5, 1, 30, 5, 1, 34, 5, 1, 15, 6, 5, 30, 6, 5 },
       { 15, 2, 3, 19, 2, 1, 30, 2, 1, 32, 2, 3, 15, 3, 1, 17, 3, 1, 19, 3, 1, 30, 3, 1, 32, 3, 1, 34, 3, 1, 15, 4, 1, 17, 4, 1, 19, 4, 1, 30, 4, 1, 32, 4, 1, 34, 4, 1, 15, 5, 1, 19, 5, 1, 30, 5, 1, 34, 5, 1, 15, 6, 5, 30, 6, 5 },
@@ -52,6 +59,27 @@ local FACE = {
     snore = { 23, 11, 4, 22, 12, 1, 27, 12, 1, 22, 13, 1, 27, 13, 1, 23, 14, 4 },
   },
 }
+
+-- link meter: runs relative to its top-left, per side (1 left: TQly, 2 right: RQly) and segment (1 = bottom);
+-- lit segments filled with 1 px rounded outer corners, unlit ones as their outline
+local LQ_X, LQ_Y, LQ_H, LQ_SEGS = 2, 13, 35, 6
+local LQ = {
+  lit = {
+    { { 6, 30, 2, 5, 31, 3, 5, 32, 3, 5, 33, 3, 6, 34, 2 }, { 5, 24, 3, 4, 25, 4, 4, 26, 4, 4, 27, 4, 5, 28, 3 }, { 4, 18, 4, 3, 19, 5, 3, 20, 5, 3, 21, 5, 4, 22, 4 }, { 3, 12, 5, 2, 13, 6, 2, 14, 6, 2, 15, 6, 3, 16, 5 }, { 2, 6, 6, 1, 7, 7, 1, 8, 7, 1, 9, 7, 2, 10, 6 }, { 1, 0, 7, 0, 1, 8, 0, 2, 8, 0, 3, 8, 1, 4, 7 } },
+    { { 9, 30, 2, 9, 31, 3, 9, 32, 3, 9, 33, 3, 9, 34, 2 }, { 9, 24, 3, 9, 25, 4, 9, 26, 4, 9, 27, 4, 9, 28, 3 }, { 9, 18, 4, 9, 19, 5, 9, 20, 5, 9, 21, 5, 9, 22, 4 }, { 9, 12, 5, 9, 13, 6, 9, 14, 6, 9, 15, 6, 9, 16, 5 }, { 9, 6, 6, 9, 7, 7, 9, 8, 7, 9, 9, 7, 9, 10, 6 }, { 9, 0, 7, 9, 1, 8, 9, 2, 8, 9, 3, 8, 9, 4, 7 } },
+  },
+  unlit = {
+    { { 6, 30, 2, 5, 31, 1, 7, 31, 1, 5, 32, 1, 7, 32, 1, 5, 33, 1, 7, 33, 1, 6, 34, 2 }, { 5, 24, 3, 4, 25, 1, 7, 25, 1, 4, 26, 1, 7, 26, 1, 4, 27, 1, 7, 27, 1, 5, 28, 3 }, { 4, 18, 4, 3, 19, 1, 7, 19, 1, 3, 20, 1, 7, 20, 1, 3, 21, 1, 7, 21, 1, 4, 22, 4 }, { 3, 12, 5, 2, 13, 1, 7, 13, 1, 2, 14, 1, 7, 14, 1, 2, 15, 1, 7, 15, 1, 3, 16, 5 }, { 2, 6, 6, 1, 7, 1, 7, 7, 1, 1, 8, 1, 7, 8, 1, 1, 9, 1, 7, 9, 1, 2, 10, 6 }, { 1, 0, 7, 0, 1, 1, 7, 1, 1, 0, 2, 1, 7, 2, 1, 0, 3, 1, 7, 3, 1, 1, 4, 7 } },
+    { { 9, 30, 2, 9, 31, 1, 11, 31, 1, 9, 32, 1, 11, 32, 1, 9, 33, 1, 11, 33, 1, 9, 34, 2 }, { 9, 24, 3, 9, 25, 1, 12, 25, 1, 9, 26, 1, 12, 26, 1, 9, 27, 1, 12, 27, 1, 9, 28, 3 }, { 9, 18, 4, 9, 19, 1, 13, 19, 1, 9, 20, 1, 13, 20, 1, 9, 21, 1, 13, 21, 1, 9, 22, 4 }, { 9, 12, 5, 9, 13, 1, 14, 13, 1, 9, 14, 1, 14, 14, 1, 9, 15, 1, 14, 15, 1, 9, 16, 5 }, { 9, 6, 6, 9, 7, 1, 15, 7, 1, 9, 8, 1, 15, 8, 1, 9, 9, 1, 15, 9, 1, 9, 10, 6 }, { 9, 0, 7, 9, 1, 1, 16, 1, 1, 9, 2, 1, 16, 2, 1, 9, 3, 1, 16, 3, 1, 9, 4, 7 } },
+  },
+}
+-- rows of the liveness pulse, bottom to top (the segments' inner rows)
+local LQ_PULSE = { 33, 32, 31, 27, 26, 25, 21, 20, 19, 15, 14, 13, 9, 8, 7, 3, 2, 1 }
+
+-- radio battery symbol, and the charge bar inside it: x, y (relative to the symbol), max width, height
+local RADIO_X, RADIO_Y = 2, 54
+local RADIO_BATT = { 1, 0, 14, 0, 1, 1, 15, 1, 1, 0, 2, 1, 15, 2, 2, 0, 3, 1, 15, 3, 2, 0, 4, 1, 15, 4, 2, 0, 5, 1, 15, 5, 2, 0, 6, 1, 15, 6, 2, 0, 7, 1, 15, 7, 1, 1, 8, 14 }
+local RADIO_FILL = { 2, 2, 12, 5 }
 -- SPRITES END
 
 -- armed: a fly buzzing in (two wing positions)
@@ -76,18 +104,6 @@ local BOLT = {
   "##..",
 }
 
--- top of the link meter, mirroring the battery's plug + connector block: antenna with signal arcs
-local RADIO_CAP = {
-  "..#....###....#..",
-  ".#..#..###..#..#.",
-  "#..#....#....#..#",
-  ".#..#...#...#..#.",
-  "..#.....#.....#..",
-  "#################",
-  "#################",
-  "#################",
-}
-
 local CLOCK = {
   "..###..",
   ".#...#.",
@@ -96,6 +112,16 @@ local CLOCK = {
   "#.....#",
   ".#...#.",
   "..###..",
+}
+
+-- VTX: a video camera
+local CAMERA = {
+  "######..",
+  "#....#.#",
+  "#....###",
+  "#....###",
+  "#....#.#",
+  "######..",
 }
 
 local STOPWATCH = {
@@ -123,13 +149,38 @@ local function runs(sprite)
   return r
 end
 
-local SPRITES = { bolt = runs(BOLT), stopwatch = runs(STOPWATCH), clock = runs(CLOCK), radioCap = runs(RADIO_CAP),
+local SPRITES = { bolt = runs(BOLT), stopwatch = runs(STOPWATCH), clock = runs(CLOCK),
                   zSmall = runs(Z_SMALL), zMid = runs(Z_MID), zBig = runs(Z_BIG),
-                  flyUp = runs(FLY_UP), flyDown = runs(FLY_DOWN), sweat = runs(SWEAT) }
+                  flyUp = runs(FLY_UP), flyDown = runs(FLY_DOWN), sweat = runs(SWEAT),
+                  camera = runs(CAMERA) }
 
-local function draw(r, x, y, flags)
+-- skipRow (optional): a row of the sprite left out
+local function draw(r, x, y, flags, skipRow)
   for i = 1, #r, 3 do
-    lcd.drawFilledRectangle(x + r[i], y + r[i + 1], r[i + 2], 1, flags)
+    if r[i + 1] ~= skipRow then lcd.drawFilledRectangle(x + r[i], y + r[i + 1], r[i + 2], 1, flags) end
+  end
+end
+
+-- rectangle with 1 px rounded corners: kind "line", "fill" or "dots"; squareTop keeps the top corners square.
+-- Dots sit an even distance from the nearer corner, so they mirror left/right and top/bottom.
+local function roundRect(x, y, w, h, kind, squareTop)
+  local t = squareTop and 0 or 1
+  if kind == "dots" then
+    for i = 2, w - 3 do
+      if math.min(i, w - 1 - i) % 2 == 0 then lcd.drawPoint(x + i, y, FORCE); lcd.drawPoint(x + i, y + h - 1, FORCE) end
+    end
+    for j = 2, h - 3 do
+      if math.min(j, h - 1 - j) % 2 == 0 then lcd.drawPoint(x, y + j, FORCE); lcd.drawPoint(x + w - 1, y + j, FORCE) end
+    end
+    return
+  end
+  lcd.drawFilledRectangle(x + t, y, w - 2 * t, 1, FORCE)
+  lcd.drawFilledRectangle(x + 1, y + h - 1, w - 2, 1, FORCE)
+  if kind == "fill" then
+    lcd.drawFilledRectangle(x, y + 1, w, h - 2, FORCE)
+  else
+    lcd.drawFilledRectangle(x, y + 1, 1, h - 2, FORCE)
+    lcd.drawFilledRectangle(x + w - 1, y + 1, 1, h - 2, FORCE)
   end
 end
 
@@ -138,14 +189,15 @@ local function clamp(v, lo, hi)
   return v
 end
 
--- Two clocks, deliberately unrelated:
--- * warnings flash with EdgeTX's own BLINK timing (bit 6 of the 10 ms clock that getTime() returns:
---   0.64 s on, 0.64 s off), so text uses the BLINK flag and shapes follow the same phase here
--- * the frog animates on its own 0.4 s beat; all its periods are whole beats (loop of 4.8 s)
--- run() reads the clock once and hands it down as t, so a whole frame shows one moment.
-local BEAT = 40
+-- Three animations, each on its own period, chosen so no two fall into step (a frog glance in time with a
+-- flashing warning looks odd):
+-- * the frog: 0.4 s beat, all its periods whole beats (loop of 4.8 s)
+-- * the warning blink, everything that flashes (drawn from blinkOn(t), text too): 1.14 s
+-- * the link meter's pulse: 2.74 s (LQ_PULSE_PERIOD)
+-- run() reads the clock once and hands it down as t (10 ms ticks), so a whole frame shows one moment.
+local BEAT, BLINK_PERIOD = 40, 114
 local function blinkOn(t)
-  return (t % 128) < 64                                  -- shown while EdgeTX's BLINK text is shown
+  return t % BLINK_PERIOD < BLINK_PERIOD // 2
 end
 
 -- ink width of a text in pixels (EdgeTX adds a blank column after each glyph);
@@ -156,36 +208,32 @@ local function inkWidth(txt, font)
   return w
 end
 
--- link quality: a stepped wedge of rectangles, narrow at the bottom and wide at the top, split
--- down the middle into two meters (left: TQly, right: RQly); lit segments filled, unlit outlined.
--- Same footprint as the drone battery: 17 px wide, cap in rows 0..8, segments in rows 9..46.
-local LQ_AXIS, LQ_BOT = 9, 47                       -- x 1..17, y 1..47 (1 px screen margin)
-local LQ_SEGS, LQ_SEG_H, LQ_GAP = 5, 6, 2
-local function linkWedge(tq, rq, warn, t)
-  draw(SPRITES.radioCap, LQ_AXIS - 8, 1, FORCE)
-  local hide = (math.min(tq, rq) < warn) and not blinkOn(t)
+-- link quality: a stepped wedge of LQ_SEGS segments per side, narrow at the bottom, split down the middle into two
+-- meters (left: TQly, right: RQly); lit segments filled, unlit ones outlined. The art and its placement are in
+-- art/gauges.py: x 2..18 (centred over the radio battery), equal space to the VTX power above and the battery below.
+-- A 1 px gap climbs through the lit segments' inner rows (LQ_PULSE) in LQ_PULSE_RUN (1.6 s), whatever the number
+-- of rows, then rests for the rest of LQ_PULSE_PERIOD (1.14 s).
+local LQ_PULSE_RUN, LQ_PULSE_PERIOD = 160, 274
+local function linkWedge(tq, rq, weak, t)
+  local hide = weak and not blinkOn(t)
   local lit = { math.ceil(LQ_SEGS * clamp(tq, 0, 100) / 100), math.ceil(LQ_SEGS * clamp(rq, 0, 100) / 100) }
-  for k = 0, LQ_SEGS - 1 do                          -- k = 0 is the bottom segment
-    local w = 4 + k                                  -- half width 4 px at the bottom, +1 px per segment
-    local y = LQ_BOT - k * (LQ_SEG_H + LQ_GAP) - (LQ_SEG_H - 1)
-    for side = 1, 2 do
-      local x = (side == 1) and (LQ_AXIS - w) or (LQ_AXIS + 1)
-      if k < lit[side] and not hide then
-        lcd.drawFilledRectangle(x, y, w, LQ_SEG_H, FORCE)
-      else
-        lcd.drawRectangle(x, y, w, LQ_SEG_H, FORCE)
-      end
+  local e = t % LQ_PULSE_PERIOD
+  local pulse = e < LQ_PULSE_RUN and LQ_PULSE[e * #LQ_PULSE // LQ_PULSE_RUN + 1] or nil
+  for side = 1, 2 do
+    for k = 1, LQ_SEGS do
+      if k <= lit[side] and not hide then draw(LQ.lit[side][k], LQ_X, LQ_Y, FORCE, pulse)
+      else draw(LQ.unlit[side][k], LQ_X, LQ_Y, FORCE) end
     end
   end
 end
 
 -- drone battery: LAVA 1S pack standing up, connector housing and plug on top;
--- x 110..126, y 1..47: mirrors the link meter (1 px screen margin)
+-- x 110..126, y 1..47 (1 px screen margin)
 local BX, BY, BW, BH = 111, 10, 15, 38
 local function droneBattery(pct, low, t)
   lcd.drawFilledRectangle(BX + 5, BY - 9, 5, 3, FORCE)          -- plug
   lcd.drawFilledRectangle(BX - 1, BY - 6, BW + 2, 6, FORCE)     -- connector housing
-  lcd.drawRectangle(BX, BY, BW, BH, FORCE)
+  roundRect(BX, BY, BW, BH, "line", true)                       -- body, its top under the connector
   if pct ~= nil and not (low and not blinkOn(t)) then
     local h = math.floor((BH - 4) * pct / 100 + 0.5)
     if h > 0 then lcd.drawFilledRectangle(BX + 2, BY + BH - 2 - h, BW - 4, h, FORCE) end
@@ -195,13 +243,14 @@ end
 
 -- drone %, centred under the battery (x 110..126); no "%" sign so 100 still (nearly) fits,
 -- ink bottom on row 62 like the bottom row text
-local function dronePercent(pct, low)
+-- low battery: highlighted (inverted) while the battery's fill shows, plain while it is hidden
+local function dronePercent(pct, low, t)
   local txt = pct and string.format("%d", pct) or "--"
   local x = BX - 1 + (BW + 2 - inkWidth(txt, "MID")) // 2
-  lcd.drawText(x, 52, txt, MIDSIZE + (low and (INVERS + BLINK) or 0))
+  lcd.drawText(x, 52, txt, MIDSIZE + ((low and blinkOn(t)) and INVERS or 0))
 end
 
--- radio battery: small symbol under the link meter (x 2..16), on the same rows as the clock symbols;
+-- radio battery: symbol under the link meter (art/gauges.py), bottom on the clock digits' row 62;
 -- returns whether it is low
 local function radioBattery(t)
   local s = getGeneralSettings()
@@ -209,21 +258,75 @@ local function radioBattery(t)
   local pct = clamp((v - s.battMin) / (s.battMax - s.battMin), 0, 1)
   local low = v < s.battWarn
   if low and not blinkOn(t) then return low end         -- flashes when the radio battery is low
-  lcd.drawRectangle(2, 56, 13, 7, FORCE)
-  lcd.drawFilledRectangle(15, 58, 2, 3, FORCE)
-  local w = math.floor(9 * pct + 0.5)
-  if w > 0 then lcd.drawFilledRectangle(4, 58, w, 3, FORCE) end
+  draw(RADIO_BATT, RADIO_X, RADIO_Y, FORCE)
+  local fx, fy, fw, fh = RADIO_FILL[1], RADIO_FILL[2], RADIO_FILL[3], RADIO_FILL[4]
+  local w = math.floor(fw * pct + 0.5)
+  if w > 0 then lcd.drawFilledRectangle(RADIO_X + fx, RADIO_Y + fy, w, fh, FORCE) end
   return low
 end
 
 -- clock and flight timer, mirrored around the screen axis x = 63.5, symbols on the outside
 local function clockAndTimer()
   local now = getDateTime()
-  draw(SPRITES.clock, 29, 56, FORCE)
+  draw(SPRITES.clock, 29, 57, FORCE)
   lcd.drawText(38, 57, string.format("%02d:%02d", now.hour, now.min), SMLSIZE)    -- ink x 38..58
   local secs = math.min(math.floor(getValue("timer1")), 99 * 60 + 59)
   lcd.drawText(69, 57, string.format("%02d:%02d", secs // 60, secs % 60), SMLSIZE) -- ink x 69..89
   draw(SPRITES.stopwatch, 92, 56, FORCE)
+end
+
+local vtx = { seq = 0, labels = {}, labelTries = {} }   -- index, at (tick of the last status reply), sent
+
+-- MSP over CRSF: frame type 0x7A (request) / 0x7B (reply), flight controller 0xC8 <-> radio 0xEA, then a status byte
+-- (bit 7 error, bit 4 first chunk, bits 5-6 MSP version 2, bits 0-3 sequence) and the MSPv2 header without $X< and
+-- CRC: flags, command lo/hi, payload size lo/hi. Replies come in chunks of up to 58 bytes; all we read is in the first.
+local function mspRequest(cmd, payload)
+  local f = { 0xC8, 0xEA, 0x50 + vtx.seq, 0, cmd % 256, cmd // 256, #payload, 0 }
+  for i, b in ipairs(payload) do f[8 + i] = b end
+  if crossfireTelemetryPush(0x7A, f) then vtx.seq = (vtx.seq + 1) % 16 end
+end
+
+local function mspReplies(t)
+  while true do
+    local cmd, d = crossfireTelemetryPop()
+    if cmd == nil then return end
+    if cmd == 0x7B and d[1] == 0xEA and d[2] == 0xC8 and d[3] < 128 and (d[3] // 16) % 2 == 1 then
+      local id, p = d[5] + d[6] * 256, 9                     -- p: first payload byte
+      if id == MSP_DEVICE_STATUS and d[p + 5] == 1 then       -- type, ready, band/channel (3), power index known?
+        vtx.index, vtx.at = d[p + 6], t
+      elseif id == MSP_POWERLEVEL and d[p + 3] then           -- index, value (2), label length, label
+        local label = ""
+        for i = p + 4, p + 3 + d[p + 3] do
+          if d[i] and d[i] > 32 then label = label .. string.char(d[i]) end
+        end
+        vtx.labels[d[p]] = label
+      end
+    end
+  end
+end
+
+-- a missing label is asked for right after the status that named its index (up to 3 times), else the status
+local function pollVtx(t, linked)
+  local i = vtx.index
+  local wantLabel = i and not vtx.labels[i] and (vtx.labelTries[i] or 0) < 3
+  if linked and (vtx.sent == nil or t - vtx.sent >= (wantLabel and VTX_LABEL_RETRY or VTX_POLL)) then
+    if wantLabel then
+      mspRequest(MSP_POWERLEVEL, { i })
+      vtx.labelTries[i] = (vtx.labelTries[i] or 0) + 1
+    else
+      mspRequest(MSP_DEVICE_STATUS, {})
+    end
+    vtx.sent = t
+  end
+  mspReplies(t)
+end
+
+-- VTX power, top left above the link meter: camera at x 1..8, the level 2 px right of it, both on rows 1..6
+local VX, VY = 1, 1
+local function vtxIndicator(t)
+  local fresh = vtx.at and t - vtx.at < VTX_STALE
+  draw(SPRITES.camera, VX, VY, FORCE)
+  lcd.drawText(VX + #CAMERA[1] + 2, VY, fresh and (vtx.labels[vtx.index] or tostring(vtx.index)) or "--", SMLSIZE)
 end
 
 -- Betaflight sends the mode name, plus "*" (ready to arm) or "!" (arming blocked) while disarmed;
@@ -238,29 +341,22 @@ local function parseMode(fm)
   return MODES[fm] or fm, true, false, false
 end
 
--- flight mode text, centred to the pixel: EdgeTX's CENTER flag counts the blank column after
--- each glyph and rounds, so the ink is measured here and the box width matched to its parity
--- screen is symmetric about x = 63.5 (link meter 1..17, battery 110..126)
+-- flight mode: a fixed 50 x 16 box, x 39..88 (centred on the screen axis x = 63.5, like the frog), y 37..52;
+-- 3 px either side of the widest names (ANGLE, CHIRP: 42 px). The name is centred in it by its measured ink
+-- (EdgeTX's CENTER counts the blank column after each glyph); an odd ink width can't be centred in the even box,
+-- the spare pixel goes to the right, where each glyph's own spacing column is anyway.
+local MB_X, MB_Y, MB_W, MB_H = 39, 37, 50, 16       -- 14 inner rows: even, like both ink heights
 local INK = { MID = { flag = MIDSIZE, top = 1, h = 10 }, SML = { flag = SMLSIZE, top = 0, h = 6 } }
 local function modeBox(name, filled, dotted)
   local font = (#name > 5) and "SML" or "MID"
   local iw, ink = inkWidth(name, font), INK[font]
-  local w = math.max(48, iw + 8)
-  if (w - 2 - iw) % 2 == 1 then w = w + 1 end
-  local h = 16                                       -- 14 inner rows: even, like both ink heights
-  local x, y = 64 - (w + 1) // 2, 37                 -- even w: centred on 63.5, odd w: on 63
-  local tx = x + 1 + (w - 2 - iw) // 2
-  local ty = y + 1 + (h - 2 - ink.h) // 2 - ink.top
+  local tx = MB_X + 1 + (MB_W - 2 - iw) // 2
+  local ty = MB_Y + 1 + (MB_H - 2 - ink.h) // 2 - ink.top
   if filled then
-    lcd.drawFilledRectangle(x, y, w, h, FORCE)
+    roundRect(MB_X, MB_Y, MB_W, MB_H, "fill")
     lcd.drawText(tx, ty, name, ink.flag + INVERS)
   else
-    if dotted then                                   -- dotted box: arming blocked
-      for i = 0, w - 1, 2 do lcd.drawPoint(x + i, y, FORCE); lcd.drawPoint(x + i, y + h - 1, FORCE) end
-      for j = 0, h - 1, 2 do lcd.drawPoint(x, y + j, FORCE); lcd.drawPoint(x + w - 1, y + j, FORCE) end
-    else
-      lcd.drawRectangle(x, y, w, h, FORCE)
-    end
+    roundRect(MB_X, MB_Y, MB_W, MB_H, dotted and "dots" or "line")   -- dotted box: arming blocked
     lcd.drawText(tx, ty, name, ink.flag)
   end
 end
@@ -353,15 +449,28 @@ end
 
 -- the frog's mood, most urgent first:
 --   asleep  no link                     eyes closed, breathing (wide mouth / open "o"), z's rising
---   dizzy   failsafe or link critical   spiral eyes spinning, wobbly mouth
---   anxious drone or radio battery low  wide eyes glancing at the low battery (right: drone, left: radio;
---                                       alternating when both), clenched teeth, sweat drop;
---                                       bounces subtly while armed, ignores the fly
---   excited armed (or finishing a catch) open grin, hops with the throttle, eyes on the fly, catches it
+--   dizzy   failsafe, link critical or  spiral eyes spinning, wobbly mouth
+--           arming blocked
+--   anxious something flashes: drone    wide eyes glancing at the side that flashes (right: drone battery,
+--           or radio battery low, link  left: link meter or radio battery), clenched teeth, sweat drop;
+--           weak                        bounces subtly while armed, ignores the fly
+--   excited armed (or finishing a catch) open grin, hops with the throttle, eyes on the fly (only), catches it
 --   resting disarmed                    eyes open, smiling
 -- resting, excited and anxious blink every 4.8 s
-local function drawFrog(mood, t, droneLow, radioLow)
-  local beat = t // BEAT
+-- anxious glances, on the frog's beat: one side flashing, a 0.3 s glance every 1.2 s; both sides, 0.4 s right and
+-- 0.4 s left, each after 0.2 s at the pilot. right, left: whether something flashes on that side
+local function glance(t, right, left)
+  local c = t % 120
+  if right and left then
+    if c >= 20 and c < 60 then return FACE.eyes.glanceRight end
+    if c >= 80 then return FACE.eyes.glanceLeft end
+  elseif c >= 60 and c < 90 then
+    return right and FACE.eyes.glanceRight or FACE.eyes.glanceLeft
+  end
+  return FACE.eyes.wide                                                     -- at the pilot
+end
+
+local function drawFrog(mood, t, right, left)
   local eyes, mouth = FACE.eyes.open, FACE.mouth.smile
   local y = FY + ((mood == "excited" or mood == "anxious") and hop.height > 0 and 2 or 0)   -- crouched to hop
           - ((hop.phase % 1 < 0.5) and hop.height or 0)
@@ -372,19 +481,12 @@ local function drawFrog(mood, t, droneLow, radioLow)
     eyes = FACE.eyes.closed
     mouth = (breath(t) < 3) and FACE.mouth.snore or FACE.mouth.wide            -- out: "o", in: wide
   elseif mood == "anxious" then
-    local c = t % 120                                                       -- every 1.2 s:
-    if droneLow and radioLow then                                           -- 0.45 s right, 0.15 s at the pilot,
-      eyes = (c >= 15 and c < 60) and FACE.eyes.atDrone                     -- 0.45 s left, 0.15 s at the pilot
-             or (c >= 75) and FACE.eyes.atRadio or FACE.eyes.wide
-    else                                                                    -- 0.3 s at the one low battery
-      eyes = (c >= 60 and c < 90) and (droneLow and FACE.eyes.atDrone or FACE.eyes.atRadio) or FACE.eyes.wide
-    end
+    eyes = glance(t, right, left)
     mouth = FACE.mouth.grimace
   elseif mood == "excited" then
     local L, R, C = FACE.eyes.lookLeft, FACE.eyes.lookRight, FACE.eyes.open
     mouth = FACE.mouth.grin
-    local b = beat % 12                                                     -- no fly: look around
-    eyes = (b == 4 or b == 5) and L or (b == 10 or b == 11) and R or C
+    eyes = C                                                                -- no fly: straight ahead
     if flyAround() then                                                     -- eyes on the fly
       eyes = (fly.x + 2 < 57) and L or (fly.x + 2 > 70) and R or C
     elseif fly.state == "caught" then
@@ -426,12 +528,13 @@ local function drawFrog(mood, t, droneLow, radioLow)
 end
 
 -- fm: the FM sensor (a string, or 0 when there is none)
-local function frogAndMode(linked, fm, droneLow, radioLow, critical, t)
+local function frogAndMode(linked, fm, droneLow, radioLow, linkWeak, critical, t)
   local name, armed, blocked, failsafe = "NO LINK", false, false, false
   if type(fm) == "string" then name, armed, blocked, failsafe = parseMode(fm) end
 
-  local mood = not linked and "asleep" or (failsafe or critical) and "dizzy"
-               or (droneLow or radioLow) and "anxious"
+  local right, left = droneLow, linkWeak or radioLow   -- something flashes on that side: the frog glances there
+  local mood = not linked and "asleep" or (failsafe or critical or blocked) and "dizzy"
+               or (right or left) and "anxious"
                or (armed or fly.state == "caught") and "excited" or "resting"
   if linked then
     local dt = lastT and clamp(t - lastT, 0, 20) / 100 or 0  -- seconds; capped when the screen was away
@@ -445,7 +548,7 @@ local function frogAndMode(linked, fm, droneLow, radioLow, critical, t)
   else
     fly.state, flying, lastT, hop.phase, hop.height = "gone", false, nil, 0, 0
   end
-  drawFrog(mood, t, droneLow, radioLow)
+  drawFrog(mood, t, right, left)
   modeBox(name, armed and not (failsafe and not blinkOn(t)), blocked)
 end
 
@@ -473,6 +576,7 @@ local function run(event)
   local linked = rq > 0
   local fm = linked and getValue("FM") or 0
   buzzOnFailsafe(fm, t)
+  pollVtx(t, linked)
 
   local droneLow, pct = false, nil
   if linked then
@@ -483,12 +587,16 @@ local function run(event)
     end
   end
 
+  local tq = linked and getValue("TQly") or 0
+  local linkWeak = linked and math.min(tq, rq) < rqWarn   -- the link meter flashes
+
   lcd.clear()
-  linkWedge(linked and getValue("TQly") or 0, rq, rqWarn, t)
+  linkWedge(tq, rq, linkWeak, t)
   droneBattery(pct, droneLow, t)
-  dronePercent(pct, droneLow)
+  dronePercent(pct, droneLow, t)
   local radioLow = radioBattery(t)
-  frogAndMode(linked, fm, droneLow, radioLow, linked and rq < rqCrit, t)
+  frogAndMode(linked, fm, droneLow, radioLow, linkWeak, linked and rq < rqCrit, t)
+  vtxIndicator(t)
   clockAndTimer()
   return 0
 end
