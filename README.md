@@ -18,7 +18,7 @@ flashes (low batteries, a weak link) and hunts a fly while armed.
 1. Copy `SCRIPTS/TELEMETRY/frog.lua` to the same path on the radio's SD card.
 2. On the radio, go to Model → Telemetry → Screens, set a screen to *Script* and select `frog`.
 
-It is developed on a RadioMaster Pocket with EdgeTX 2.12.
+Developed on a RadioMaster Pocket with EdgeTX 2.12.
 
 ## Development
 
