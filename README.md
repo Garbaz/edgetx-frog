@@ -1,5 +1,9 @@
 # EdgeTX FROG Telemetry Screen
 
+[![GitHub](https://img.shields.io/badge/GitHub-Garbaz%2Fedgetx--frog-blue?logo=github)](https://github.com/Garbaz/edgetx-frog)
+![EdgeTX](https://img.shields.io/badge/EdgeTX-2.12-blue)
+[![License](https://img.shields.io/github/license/Garbaz/edgetx-frog)](LICENSE)
+
 A telemetry screen for EdgeTX radios with a 128×64 B&W display, for Betaflight quads over ELRS/CRSF. It shows:
 
 - the VTX power (top left)
@@ -30,4 +34,8 @@ uv run build.py               # regenerate the sprites in frog.lua, render the p
 uv run sim/render.py --help   # one-off renders of single states and frames, animation info
 ```
 
-The fonts in `sim/fonts/` come from EdgeTX (GPL-2.0).
+## License
+
+GNU General Public License v2 or later, see [LICENSE](LICENSE).
+
+The fonts in `sim/fonts/` come from [EdgeTX](https://github.com/EdgeTX/edgetx) (GPL-2.0-only).

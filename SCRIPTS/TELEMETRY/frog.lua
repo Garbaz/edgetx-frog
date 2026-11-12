@@ -1,4 +1,5 @@
 -- FROG A75C telemetry screen for the RadioMaster Pocket (EdgeTX, 128x64 B&W)
+-- SPDX-License-Identifier: GPL-2.0-or-later
 --
 --  left:   VTX power (top), link quality wedge below it (left half: TQly = what the radio receives,
 --                                                right half: RQly = what the drone receives)
