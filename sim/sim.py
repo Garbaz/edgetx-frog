@@ -114,12 +114,20 @@ class Session:
         g.crossfireTelemetryPop = lambda: self.crsf.pop(0) if self.crsf else None
         self.mod = self.L.execute(open(script).read())
     def msp(self, cmd, d):
-        """Betaflight answering MSP over CRSF (when linked): VTX device status and vtxtable power levels."""
-        if cmd != 0x7A or not self.tel.get('rq'): return True
+        """Betaflight answering MSP over CRSF (when linked, unless tel['msp'] is False): VTX device status, vtxtable
+        power levels (tel['vtx'] the power index, tel['pit'] the pit mode flag) and the battery state
+        (tel['batt']: 0 OK, 1 warning, 2 critical, 3 not present)."""
+        if cmd != 0x7A or not self.tel.get('rq') or self.tel.get('msp') is False: return True
         status, mcmd = d[2], d[4] | d[5] << 8
         if mcmd == 0x3004:      # SmartAudio, ready, band/channel B1, power index, 5733 MHz, status, 8 placeholder levels
-            body = bytes([3, 1, 1, 2, 1, 1, self.tel.get('vtx', 5), 1, 0x65, 0x16, 1, 0, 0, 0, 0, 8]) + bytes([1, 0, 1, 0]) * 8 \
+            pit = int(self.tel.get('pit', False))
+            body = bytes([3, 1, 1, 2, 1, 1, self.tel.get('vtx', 5), 1, 0x65, 0x16, 1, pit, 0, 0, 0, 8]) + bytes([1, 0, 1, 0]) * 8 \
                    + bytes([5, 2, 0, 0, 0, 0])
+        elif mcmd == 130:       # MSP_BATTERY_STATE: cells, capacity, V (0.1), mAh, A, state, V (0.01)
+            v = round(100 * (self.tel.get('pack', self.tel.get('RxBt')) or 0))   # tel['pack'], tel['cells']: a
+            cells = self.tel.get('cells', 1 if v else 0)                           # multi-cell pack, else 1S
+            body = bytes([cells, 0, 0, min(255, (v + 5) // 10), 0, 0, 0, 0, self.tel.get('batt', 0)]) \
+                   + v.to_bytes(2, 'little')
         elif mcmd == 138:       # index, value, label length, label
             i = d[8]; body = bytes([i, VTX_VALUES[i - 1], 0, 3]) + VTX_LABELS[i - 1].ljust(3).encode()
         else: return True
@@ -140,7 +148,8 @@ class Session:
 
 def run(script, tel, blink_on, t=None):
     ses, t0 = Session(script), 10 if t is None else t
-    for w in (t0 - 40, t0 - 20): ses.frame(tel, w)   # earlier frames: the VTX status and its label asked over MSP
+    for w in (t0 - 60, t0 - 40, t0 - 20):          # earlier frames: battery state, VTX status and label asked over MSP
+        ses.frame(tel.get('before', tel), w)       # (tel['before']: what the drone sent before, e.g. armed)
     return ses.frame(tel, t0, None if t is not None else blink_on)
 
 def to_img(px, scale=4):
@@ -153,9 +162,10 @@ def to_img(px, scale=4):
                 d.rectangle([(x + 1) * scale, (y + 1) * scale, (x + 2) * scale - 1, (y + 2) * scale - 1], fill=on)
     return im
 
-def tel(rq, tq, tx, bat=None, v=None, fm=None, t=0):
+def tel(rq, tq, tx, bat=None, v=None, fm=None, t=0, batt=None):
+    """batt: Betaflight's battery state (MSP_BATTERY_STATE); default OK, or not present at 0 V"""
     d = dict(rq=rq, tx=tx, t=t)
-    if rq: d.update({'TQly': tq, 'Bat%': bat, 'RxBt': v, 'FM': fm, 'vtx': 5})   # VTX in pit mode (SC middle)
+    if rq: d.update({'TQly': tq, 'Bat%': bat, 'RxBt': v, 'FM': fm, 'vtx': 5, 'batt': (3 if v == 0 else 0) if batt is None else batt})   # VTX in pit mode (SC middle)
     return d
 
 def labelled(im, name):
@@ -185,16 +195,16 @@ def flight(t):
     return d
 
 def low_flight(t):
-    d = flight(t); d.update({'Bat%': 18, 'RxBt': 3.5}); return d
+    d = flight(t); d.update({'Bat%': 18, 'RxBt': 3.5, 'batt': 1}); return d
 
 ARMED, READY, BLOCKED = tel(99, 98, 7.9, 87, 3.9, 'AIR', 83), tel(99, 99, 8.2, 100, 4.3, 'AIR*'), tel(80, 85, 7.6, 64, 4.0, 'ANGL!')
-LOW, FAILSAFE, WEAK = tel(90, 92, 7.5, 18, 3.5, 'AIR', 312), tel(12, 30, 7.4, 41, 3.8, '!FS!', 401), tel(30, 64, 7.6, 58, 3.8, 'HOR', 200)
+LOW, FAILSAFE, WEAK = tel(90, 92, 7.5, 18, 3.5, 'AIR', 312, batt=1), dict(tel(12, 30, 7.4, 41, 3.8, '!FS!', 401), before=ARMED), tel(30, 64, 7.6, 58, 3.8, 'HOR', 200)
 LINK_WEAK = tel(44, 70, 7.9, 87, 3.9, 'AIR*')        # RQly 44: below the warning (45), above critical (42)
-ALL_FLASH = tel(44, 70, 6.7, 18, 3.5, 'AIR*')        # weak link, both batteries low
+ALL_FLASH = tel(44, 70, 6.7, 18, 3.5, 'AIR*', batt=1)        # weak link, both batteries low
 NOLINK = tel(0, 0, 6.7)
-LOW_READY = tel(90, 92, 7.5, 18, 3.5, 'AIR*')
+LOW_READY = tel(90, 92, 7.5, 18, 3.5, 'AIR*', batt=1)
 RADIO_LOW = tel(99, 99, 6.7, 100, 4.3, 'AIR*')
-BOTH_LOW = tel(90, 92, 6.7, 18, 3.5, 'AIR*')
+BOTH_LOW = tel(90, 92, 6.7, 18, 3.5, 'AIR*', batt=1)
 NO_BATT = tel(99, 99, 8.2, 100, 0.0, 'AIR!')   # drone on USB, no battery: Betaflight sends 0 V
 VTX_HIGH = dict(READY, vtx=3)                  # SC down: VTX 200 mW (the other states: SC middle, pit mode)
 STATES = [  # name, telemetry, time in 10 ms ticks (one frog beat = 40 ticks)
@@ -228,7 +238,10 @@ LOOP = 1920       # ticks (10 ms): preview length, 19.2 s = 4 frog loops and the
                   # blink and the link pulse run on their own periods, so they jump where the preview loops
 STEP = 5          # 20 fps
 
-def at(tl, t): return tl(t) if callable(tl) else tl
+def at(tl, t):
+    """telemetry at tick t of a session: a scripted profile, or a fixed state (after tel['before'] for 20 ticks)"""
+    if callable(tl): return tl(t)
+    return tl['before'] if 'before' in tl and t < 20 else tl
 
 def readme_frame(panels, scale=3, cols=3, gap=1):
     """One README frame: palette image, index 0 transparent (the gaps), 1 LCD background, 2 LCD ink."""

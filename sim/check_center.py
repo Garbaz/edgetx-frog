@@ -1,11 +1,12 @@
 """Measure the mode text's margins inside its fixed box, straight from the rendered pixels: equal, or (odd ink
-width in the even box) the spare pixel on the right."""
+width in the even box) the spare pixel on the right. Exits 1 if one isn't."""
 import sys
 sys.path.insert(0, sys.path[0])
 from sim import run
 script = sys.argv[1]
-cases = [('AIR', 'armed'), ('AIR*', 'ready'), ('ANGL!', 'blocked'), ('HOR', 'armed'), ('!FS!', 'failsafe'),
-         ('ALTH', 'armed'), ('CHIR', 'armed'), (None, 'no link')]
+failed = 0
+cases = [('AIR', 'armed'), ('AIR*', 'ready'), ('ACRO?', 'ready'), ('ANGL!', 'blocked'), ('HOR', 'armed'), ('!FS!', 'failsafe'), ('RTH', 'armed'),
+         ('ALTH', 'armed'), ('PHFL', 'armed'), ('CHIR', 'armed'), (None, 'no link')]
 for fm, label in cases:
     tel = dict(rq=0, tx=7.9) if fm is None else {'rq': 99, 'tx': 7.9, 'TQly': 99, 'Bat%': 80, 'RxBt': 4.0, 'FM': fm}
     px = run(script, tel, True)
@@ -18,4 +19,6 @@ for fm, label in cases:
     ix0 = min(x for x, _ in ink); ix1 = max(x for x, _ in ink); iy0 = min(y for _, y in ink); iy1 = max(y for _, y in ink)
     L, R, T, B = ix0 - x0 - 1, x1 - ix1 - 1, iy0 - y0 - 1, y1 - iy1 - 1
     ok = 'OK ' if (R - L in (0, 1) and T == B) else 'OFF'
+    failed += ok == 'OFF'
     print(f'{ok} {label:9s} {str(fm):6s} box x{x0}-{x1} y{y0}-{y1}  margins L{L} R{R} T{T} B{B}')
+sys.exit(1 if failed else 0)
