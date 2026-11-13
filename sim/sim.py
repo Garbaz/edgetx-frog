@@ -233,8 +233,8 @@ LOW_FLIGHT_STILLS = [  # the same flight with a low battery: anxious frog, the f
 ANIM = [("armed: scripted flight", flight), ("disarmed: resting", READY), ("arming blocked: dizzy", BLOCKED),
         ("low battery: anxious", LOW_READY), ("radio battery low", RADIO_LOW), ("both batteries low", BOTH_LOW), ("low battery while flying", low_flight), ("failsafe", FAILSAFE), ("link critical", WEAK), ("link weak", LINK_WEAK),
         ("weak link, both batteries low", ALL_FLASH), ("no link: asleep, radio battery low", NOLINK)]
-README = [("armed: hunting the fly", flight), ("disarmed: resting", READY), ("arming blocked", BLOCKED),
-          ("low battery: anxious", low_flight), ("failsafe: dizzy", FAILSAFE), ("no link: asleep", NOLINK)]
+README = [("no link: asleep", NOLINK), ("disarmed: resting", READY), ("armed: hunting the fly", flight),   # top row
+          ("low battery: anxious", low_flight), ("arming blocked: dizzy", BLOCKED), ("failsafe: dizzy", FAILSAFE)]
 LOOP = 1920       # ticks (10 ms): preview length, 19.2 s = 4 frog loops and the scripted flight; the warning
                   # blink and the link pulse run on their own periods, so they jump where the preview loops
 STEP = 5          # 20 fps
