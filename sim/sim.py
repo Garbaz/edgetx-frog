@@ -191,12 +191,14 @@ def flight(t):
     elif 9.6 <= s < 17.0: thr, tilt = 0.85, 0.9
     armed = 0.5 <= s < 16.5
     d = tel(99, 98, 7.9, 87, 3.9, 'AIR' if armed else 'AIR*', 83)
-    d.update({'thr': -1024 + 2048 * thr, 'Ptch': tilt, 'Roll': 0.0, 'vtx': 1})      # SC up: VTX 25 mW
+    d.update({'thr': -1024 + 2048 * thr, 'Ptch': tilt, 'Roll': 0.0, 'vtx': 4})      # VTX 400 mW
     return d
 
 def low_flight(t):
     """The scripted flight with a low battery, on a quad without airmode (ACRO, where flight() has AIR)"""
-    d = flight(t); d.update({'Bat%': 18, 'RxBt': 3.5, 'batt': 1, 'FM': d['FM'].replace('AIR', 'ACRO')}); return d
+    d = flight(t)
+    d.update({'Bat%': 18, 'RxBt': 3.5, 'batt': 1, 'FM': d['FM'].replace('AIR', 'ACRO'), 'vtx': 1})   # VTX 25 mW
+    return d
 
 ARMED, READY, BLOCKED = tel(99, 98, 7.9, 87, 3.9, 'AIR', 83), tel(99, 99, 8.2, 100, 4.3, 'AIR*'), tel(80, 85, 7.6, 64, 4.0, 'ANGL!')
 LOW, FAILSAFE, WEAK = tel(90, 92, 7.5, 18, 3.5, 'AIR', 312, batt=1), dict(tel(12, 30, 7.4, 41, 3.8, '!FS!', 401), before=ARMED), tel(30, 64, 7.6, 58, 3.8, 'HOR', 200)
