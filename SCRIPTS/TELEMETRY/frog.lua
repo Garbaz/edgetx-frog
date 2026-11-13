@@ -1,5 +1,5 @@
 -- FROG telemetry screen for EdgeTX radios with a 128x64 B&W display, for Betaflight over CRSF (ELRS, Crossfire)
--- Version 0.0.0, https://github.com/Garbaz/edgetx-frog
+-- Version 0.1.0, https://github.com/Garbaz/edgetx-frog
 -- SPDX-License-Identifier: GPL-2.0-or-later
 --
 --  left:   VTX power (top), link quality wedge below it (left half: TQly = what the radio receives,

@@ -5,6 +5,8 @@ All notable changes to the FROG telemetry screen. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-13
+
 ### Added
 
 - The first release: a telemetry screen for EdgeTX radios with a 128×64 B&W display, for Betaflight over CRSF. It
@@ -18,4 +20,5 @@ All notable changes to the FROG telemetry screen. The format follows
 - VTX power and pit mode, asked from Betaflight over MSP.
 - A double vibration every 2.4 s in failsafe, which logical switches can't do (the flight mode is text).
 
-[Unreleased]: https://github.com/Garbaz/edgetx-frog/commits/main
+[Unreleased]: https://github.com/Garbaz/edgetx-frog/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Garbaz/edgetx-frog/releases/tag/v0.1.0
