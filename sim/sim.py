@@ -195,7 +195,8 @@ def flight(t):
     return d
 
 def low_flight(t):
-    d = flight(t); d.update({'Bat%': 18, 'RxBt': 3.5, 'batt': 1}); return d
+    """The scripted flight with a low battery, on a quad without airmode (ACRO, where flight() has AIR)"""
+    d = flight(t); d.update({'Bat%': 18, 'RxBt': 3.5, 'batt': 1, 'FM': d['FM'].replace('AIR', 'ACRO')}); return d
 
 ARMED, READY, BLOCKED = tel(99, 98, 7.9, 87, 3.9, 'AIR', 83), tel(99, 99, 8.2, 100, 4.3, 'AIR*'), tel(80, 85, 7.6, 64, 4.0, 'ANGL!')
 LOW, FAILSAFE, WEAK = tel(90, 92, 7.5, 18, 3.5, 'AIR', 312, batt=1), dict(tel(12, 30, 7.4, 41, 3.8, '!FS!', 401), before=ARMED), tel(30, 64, 7.6, 58, 3.8, 'HOR', 200)
